@@ -1,0 +1,55 @@
+npm run dev
+
+echo "# meropasswordmanager" >> README.md
+git init
+git add .
+git commit -m "first commit"
+git branch -M main
+git remote add origin https://github.com/bibekchandsah/meropasswordmanager.git
+git push -u origin main
+
+git remote add origin https://github.com/bibekchandsah/meropasswordmanager.git
+git branch -M main
+git push -u origin main
+
+
+
+dashboard page:
+user should be able to import (auto detect or manually select column values) and export passwords
+dashboard showing: total saved passwords, strong password, medium passowrd, weak passwords, reused password in number and graph representation
+show recently added passwords in dashboard in rows format like list view of grid cards
+
+password page:
+search password and filter by (favourite, pasword: low, medium, storng)
+user input cantiner = 
+account name, 
+site, 
+password 
+    (show/hide icon) 
+    (show how strong status of password is),
+    (user should be able to generate storng password)
+        show strong password suggestion on the basis of user entered password
+note (# copy icon in all)
+user able to edit, delete each container
+show created and last modified date and time stamp
+show fav icon of site
+user should be able to mark/unmark as favorite
+user should be able to import (auto detect or manually select column values) and export passwords
+
+setting page:
+user profile picture: add/remove
+user name:
+user email:
+enable/disable totp 2FA authentication 
+user should be able to import (auto detect or manually select column values) and export passwords
+dark/light mode
+change password if logged in from email manually after verifying
+delete account after verifying
+logout 
+
+
+use firebase and supabase for database and authentication
+allow user to login from google/manually email
+
+https://apps.microsoft.com/detail/9PF0ZF86W5HK?hl=en&gl=US&ocid=pdpshare
+https://resend.com/emails

@@ -1,13 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useStore } from '@/store/useStore';
 import { db } from '@/lib/firebase';
 import { collection, query, getDocs, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { decryptData, encryptData, deriveKey } from '@/lib/crypto';
-import { Download, RefreshCcw, User, ShieldAlert, Trash2, Upload } from 'lucide-react';
+import { Download, RefreshCcw, Smartphone, User, ShieldAlert, Trash2, Upload } from 'lucide-react';
 import { VaultItem } from '@/types/vault';
 import { ImportTargetField, mapCsvRowsToVaultItems, parseCsv, suggestColumnMapping, vaultItemsToCsv } from '@/lib/csv';
+
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
+};
 
 type ColumnMapping = Record<ImportTargetField, string | null>;
 
@@ -24,6 +29,9 @@ const FIELD_LABELS: Record<ImportTargetField, string> = {
 
 export default function SettingsPage() {
   const { user, masterKey, setMasterKey } = useStore();
+  const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
+  const [isPwaInstalled, setIsPwaInstalled] = useState(false);
+  const [isInstallFlowRunning, setIsInstallFlowRunning] = useState(false);
   const [loadingCsvExport, setLoadingCsvExport] = useState(false);
   const [loadingImport, setLoadingImport] = useState(false);
   const [loadingMasterPasswordChange, setLoadingMasterPasswordChange] = useState(false);
@@ -45,6 +53,37 @@ export default function SettingsPage() {
     notes: null,
     favorite: null
   });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const checkInstalled = () => {
+      const standaloneByMedia = window.matchMedia('(display-mode: standalone)').matches;
+      const standaloneByNavigator = Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
+      setIsPwaInstalled(standaloneByMedia || standaloneByNavigator);
+    };
+
+    checkInstalled();
+
+    const onBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPromptEvent(event as BeforeInstallPromptEvent);
+    };
+
+    const onAppInstalled = () => {
+      setIsPwaInstalled(true);
+      setInstallPromptEvent(null);
+      setIsInstallFlowRunning(false);
+    };
+
+    window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt);
+    window.addEventListener('appinstalled', onAppInstalled);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', onAppInstalled);
+    };
+  }, []);
 
   const mappingReady = REQUIRED_FIELDS.every((field) => Boolean(mapping[field]));
 
@@ -294,6 +333,23 @@ export default function SettingsPage() {
     return mappedRow;
   });
 
+  const handleInstallApp = async () => {
+    if (!installPromptEvent) return;
+
+    setIsInstallFlowRunning(true);
+
+    try {
+      await installPromptEvent.prompt();
+      const result = await installPromptEvent.userChoice;
+
+      if (result.outcome === 'accepted') {
+        setInstallPromptEvent(null);
+      }
+    } finally {
+      setIsInstallFlowRunning(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full gap-6">
       <div>
@@ -326,6 +382,34 @@ export default function SettingsPage() {
         </h2>
 
         <div className="space-y-6">
+          {!isPwaInstalled ? (
+            <div className="p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl">
+              <div>
+                <h3 className="font-semibold text-slate-200">Install App (PWA)</h3>
+                <p className="text-sm text-zinc-400 max-w-xl">
+                  Install Mero Password Manager for a native app-like experience with faster launch and offline shell support.
+                </p>
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <button
+                  onClick={handleInstallApp}
+                  disabled={!installPromptEvent || isInstallFlowRunning}
+                  className="bg-amber-500 hover:bg-amber-400 text-zinc-950 font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed min-w-[150px] justify-center whitespace-nowrap"
+                >
+                  {isInstallFlowRunning ? <RefreshCcw className="w-4 h-4 animate-spin" /> : <Smartphone className="w-4 h-4" />}
+                  {isInstallFlowRunning ? 'Opening...' : 'Install App'}
+                </button>
+
+                {!installPromptEvent ? (
+                  <p className="text-xs text-zinc-500">
+                    If the button is disabled, open your browser menu and choose "Install app" or "Add to Home screen".
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
           <div className="p-4 bg-blue-500/5 border border-blue-500/20 rounded-xl">
             <div>
               <h3 className="font-semibold text-slate-200">Export Vault</h3>

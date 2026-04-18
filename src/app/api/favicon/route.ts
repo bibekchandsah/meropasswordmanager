@@ -1,10 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const ICON_LINK_REGEX = /<link[^>]*rel=["'][^"']*icon[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>/gi;
-const MANIFEST_LINK_REGEX = /<link[^>]*rel=["'][^"']*manifest[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>/i;
-const MANIFEST_ICON_REGEX = /"icons"\s*:\s*\[(.*?)\]/is;
-const ICON_SRC_REGEX = /"src"\s*:\s*"([^"]+)"/gi;
-
 const normalizeTargetUrl = (value: string | null): URL | null => {
   if (!value) return null;
   const trimmed = value.trim();
@@ -12,46 +7,29 @@ const normalizeTargetUrl = (value: string | null): URL | null => {
   const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
   try {
     const parsed = new URL(withProtocol);
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      return null;
-    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
     return parsed;
   } catch {
     return null;
   }
 };
 
-const firstResolvedIconFromHtml = (html: string, baseUrl: URL): string | null => {
-  let match: RegExpExecArray | null;
-  while ((match = ICON_LINK_REGEX.exec(html)) !== null) {
-    const href = match[1]?.trim();
-    if (!href) continue;
-    if (href.startsWith('data:')) continue;
-    try {
-      return new URL(href, baseUrl).toString();
-    } catch {
-      continue;
-    }
+/** Check if a URL returns a valid image response (server-side HEAD probe). */
+const probeImageUrl = async (url: string): Promise<boolean> => {
+  try {
+    const res = await fetch(url, {
+      method: 'HEAD',
+      headers: { 'user-agent': 'Mozilla/5.0 (compatible; MeroPasswordManager/1.0)' },
+      redirect: 'follow',
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!res.ok) return false;
+    const ct = res.headers.get('content-type') ?? '';
+    // Accept image/* or application/octet-stream (some servers serve .ico with this type)
+    return ct.startsWith('image/') || ct === 'application/octet-stream';
+  } catch {
+    return false;
   }
-  return null;
-};
-
-const firstResolvedIconFromManifest = (manifestText: string, manifestUrl: URL): string | null => {
-  const iconBlock = MANIFEST_ICON_REGEX.exec(manifestText);
-  if (!iconBlock?.[1]) return null;
-
-  let iconMatch: RegExpExecArray | null;
-  while ((iconMatch = ICON_SRC_REGEX.exec(iconBlock[1])) !== null) {
-    const src = iconMatch[1]?.trim();
-    if (!src) continue;
-    try {
-      return new URL(src, manifestUrl).toString();
-    } catch {
-      continue;
-    }
-  }
-
-  return null;
 };
 
 export async function GET(request: NextRequest) {
@@ -60,51 +38,34 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid url parameter' }, { status: 400 });
   }
 
-  try {
-    const pageResponse = await fetch(target.toString(), {
-      headers: {
-        'user-agent': 'meropasswordmanager-Favicon-Resolver/1.0'
-      },
-      cache: 'no-store'
-    });
+  const host = target.hostname;
+  const origin = target.origin;
+  const encoded = encodeURIComponent(target.toString());
 
-    if (!pageResponse.ok) {
-      return NextResponse.json({ error: 'Failed to fetch target page' }, { status: 404 });
-    }
+  // Probe in order of reliability. We do HEAD requests server-side to avoid
+  // CORS issues on the client. HTML scraping was removed because it fails for
+  // SPAs (GitHub Pages, Netlify, Vercel, Render) that render icons via JS.
+  const probes: string[] = [
+    `https://www.google.com/s2/favicons?sz=64&domain_url=${encoded}`,
+    `https://icons.duckduckgo.com/ip3/${host}.ico`,
+    `https://icon.horse/icon/${host}`,
+    `${origin}/favicon.ico`,
+    `${origin}/favicon.png`,
+  ];
 
-    const html = await pageResponse.text();
-
-    const directIcon = firstResolvedIconFromHtml(html, target);
-    if (directIcon) {
-      return NextResponse.json({ iconUrl: directIcon });
-    }
-
-    const manifestMatch = MANIFEST_LINK_REGEX.exec(html);
-    const manifestHref = manifestMatch?.[1]?.trim();
-    if (manifestHref) {
-      try {
-        const manifestUrl = new URL(manifestHref, target);
-        const manifestResponse = await fetch(manifestUrl.toString(), {
+  for (const url of probes) {
+    const ok = await probeImageUrl(url);
+    if (ok) {
+      return NextResponse.json(
+        { iconUrl: url },
+        {
           headers: {
-            'user-agent': 'meropasswordmanager-Favicon-Resolver/1.0'
+            'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800',
           },
-          cache: 'no-store'
-        });
-
-        if (manifestResponse.ok) {
-          const manifestText = await manifestResponse.text();
-          const manifestIcon = firstResolvedIconFromManifest(manifestText, manifestUrl);
-          if (manifestIcon) {
-            return NextResponse.json({ iconUrl: manifestIcon });
-          }
         }
-      } catch {
-        // Ignore manifest parse failures and continue fallback.
-      }
+      );
     }
-
-    return NextResponse.json({ iconUrl: null }, { status: 404 });
-  } catch {
-    return NextResponse.json({ error: 'Resolver request failed' }, { status: 502 });
   }
+
+  return NextResponse.json({ iconUrl: null }, { status: 404 });
 }

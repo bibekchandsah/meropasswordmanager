@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState, useEffect } from 'react';
 import { Globe } from 'lucide-react';
@@ -15,7 +15,7 @@ interface CacheEntry {
 
 type FaviconCache = Record<string, CacheEntry>;
 
-const CACHE_KEY = 'favicon_cache';
+const CACHE_KEY = 'favicon_cache_v2';
 const CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 const getCacheMap = (): FaviconCache => {

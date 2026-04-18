@@ -1,356 +1,271 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useStore } from '@/store/useStore';
+import { useRouter } from 'next/navigation';
+import { collection, getDocs, doc, writeBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { collection, query, getDocs, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { decryptData, encryptData, deriveKey } from '@/lib/crypto';
-import { Download, RefreshCcw, Smartphone, User, ShieldAlert, Trash2, Upload } from 'lucide-react';
-import { VaultItem } from '@/types/vault';
-import { ImportTargetField, mapCsvRowsToVaultItems, parseCsv, suggestColumnMapping, vaultItemsToCsv } from '@/lib/csv';
+import { Download, Upload, RefreshCcw, Trash2, User, ShieldAlert, Smartphone } from 'lucide-react';
+import { usePwaInstall } from '@/hooks/usePwaInstall';
 
-type BeforeInstallPromptEvent = Event & {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
-};
-
-type ColumnMapping = Record<ImportTargetField, string | null>;
-
-const REQUIRED_FIELDS: ImportTargetField[] = ['siteName', 'username', 'password'];
+type ImportTargetField = 'name' | 'username' | 'password' | 'url' | 'notes';
 
 const FIELD_LABELS: Record<ImportTargetField, string> = {
-  siteName: 'Site / App Name *',
-  username: 'Username / Email *',
-  password: 'Password *',
-  url: 'URL',
+  name: 'Name / Title',
+  username: 'Username / Email',
+  password: 'Password',
+  url: 'URL / Website',
   notes: 'Notes',
-  favorite: 'Favorite'
 };
+
+type CsvRow = Record<string, string>;
 
 export default function SettingsPage() {
   const { user, masterKey, setMasterKey } = useStore();
-  const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
-  const [isPwaInstalled, setIsPwaInstalled] = useState(false);
-  const [isInstallFlowRunning, setIsInstallFlowRunning] = useState(false);
-  const [loadingCsvExport, setLoadingCsvExport] = useState(false);
-  const [loadingImport, setLoadingImport] = useState(false);
-  const [loadingMasterPasswordChange, setLoadingMasterPasswordChange] = useState(false);
-  const [importError, setImportError] = useState('');
-  const [importMessage, setImportMessage] = useState('');
-  const [masterPasswordError, setMasterPasswordError] = useState('');
-  const [masterPasswordMessage, setMasterPasswordMessage] = useState('');
-  const [currentMasterPasswordInput, setCurrentMasterPasswordInput] = useState('');
-  const [newMasterPasswordInput, setNewMasterPasswordInput] = useState('');
-  const [confirmNewMasterPasswordInput, setConfirmNewMasterPasswordInput] = useState('');
-  const [csvFileName, setCsvFileName] = useState('');
+  const router = useRouter();
+  const { canInstall, isInstalled, isInstallFlowRunning, handleInstallApp } = usePwaInstall();
+
+  const [csvRows, setCsvRows] = useState<CsvRow[]>([]);
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
-  const [csvRows, setCsvRows] = useState<string[][]>([]);
-  const [mapping, setMapping] = useState<ColumnMapping>({
-    siteName: null,
+  const [csvFileName, setCsvFileName] = useState<string | null>(null);
+  const [mapping, setMapping] = useState<Record<ImportTargetField, string | null>>({
+    name: null,
     username: null,
     password: null,
     url: null,
     notes: null,
-    favorite: null
   });
+  const [mappingReady, setMappingReady] = useState(false);
+  const [loadingImport, setLoadingImport] = useState(false);
+  const [importMessage, setImportMessage] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [loadingCsvExport, setLoadingCsvExport] = useState(false);
+
+  const [currentMasterPasswordInput, setCurrentMasterPasswordInput] = useState('');
+  const [newMasterPasswordInput, setNewMasterPasswordInput] = useState('');
+  const [confirmNewMasterPasswordInput, setConfirmNewMasterPasswordInput] = useState('');
+  const [loadingMasterPasswordChange, setLoadingMasterPasswordChange] = useState(false);
+  const [masterPasswordMessage, setMasterPasswordMessage] = useState<string | null>(null);
+  const [masterPasswordError, setMasterPasswordError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const checkInstalled = () => {
-      const standaloneByMedia = window.matchMedia('(display-mode: standalone)').matches;
-      const standaloneByNavigator = Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
-      setIsPwaInstalled(standaloneByMedia || standaloneByNavigator);
-    };
-
-    checkInstalled();
-
-    const onBeforeInstallPrompt = (event: Event) => {
-      event.preventDefault();
-      setInstallPromptEvent(event as BeforeInstallPromptEvent);
-    };
-
-    const onAppInstalled = () => {
-      setIsPwaInstalled(true);
-      setInstallPromptEvent(null);
-      setIsInstallFlowRunning(false);
-    };
-
-    window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt);
-    window.addEventListener('appinstalled', onAppInstalled);
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt);
-      window.removeEventListener('appinstalled', onAppInstalled);
-    };
-  }, []);
-
-  const mappingReady = REQUIRED_FIELDS.every((field) => Boolean(mapping[field]));
-
-  const loadDecryptedVault = async (): Promise<VaultItem[]> => {
-    if (!user || !masterKey) return [];
-
-    const q = query(collection(db, `users/${user.uid}/vault`));
-    const snap = await getDocs(q);
-
-    const decryptedVault: VaultItem[] = [];
-    snap.forEach((docSnap) => {
-      const data = docSnap.data();
-      if (!data.encryptedData) return;
-
-      const decryptedJson = decryptData(data.encryptedData, masterKey);
-      if (!decryptedJson) return;
-
-      try {
-        const parsed: VaultItem = JSON.parse(decryptedJson);
-        decryptedVault.push(parsed);
-      } catch {
-        // Skip entries that cannot be parsed with current session key.
-      }
-    });
-
-    return decryptedVault;
-  };
+    if (!user) {
+      router.push('/auth');
+    }
+  }, [user, router]);
 
   const handleExportCsv = async () => {
-    if (!user || !masterKey) return;
+    if (!user || !masterKey) {
+      alert('You must be logged in and unlocked to export.');
+      return;
+    }
     setLoadingCsvExport(true);
-
     try {
-      const decryptedVault = await loadDecryptedVault();
-      const csvText = vaultItemsToCsv(decryptedVault);
-      const csvBlob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' });
-      const url = window.URL.createObjectURL(csvBlob);
+      const querySnapshot = await getDocs(collection(db, 'users', user.uid, 'passwords'));
+      const passwords = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          name: decryptData(data.name, masterKey),
+          username: decryptData(data.username, masterKey),
+          password: decryptData(data.password, masterKey),
+          url: data.url ? decryptData(data.url, masterKey) : '',
+          notes: data.notes ? decryptData(data.notes, masterKey) : '',
+        };
+      });
 
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `meropasswordmanager_export_${new Date().toISOString().split('T')[0]}.csv`;
-      a.click();
-      window.URL.revokeObjectURL(url);
-    } catch (e) {
-      console.error('CSV export failed', e);
-      alert('Failed to export CSV.');
+      const headers = ['name', 'username', 'password', 'url', 'notes'];
+      const csvContent = [
+        headers.join(','),
+        ...passwords.map(p => headers.map(h => `"${(p[h as keyof typeof p] ?? '').replace(/"/g, '""')}"`).join(','))
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-s8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.setAttribute('download', `mero_password_export_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Error exporting CSV:', error);
+      alert('An error occurred while exporting your vault.');
     } finally {
       setLoadingCsvExport(false);
     }
   };
 
-  const handleCsvPicked = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCsvPicked = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    setImportError('');
-    setImportMessage('');
-
     if (!file) return;
-    if (!file.name.toLowerCase().endsWith('.csv')) {
-      setImportError('Please select a valid CSV file.');
-      return;
-    }
 
-    try {
-      const text = await file.text();
-      const parsed = parseCsv(text);
+    setCsvFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      const allLines = text.split(/\r\n|\n/);
+      const headers = allLines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+      setCsvHeaders(headers);
 
-      if (parsed.headers.length === 0 || parsed.rows.length === 0) {
-        setImportError('CSV is empty or missing a header row.');
-        setCsvFileName('');
-        setCsvHeaders([]);
-        setCsvRows([]);
-        return;
+      const rows = allLines.slice(1).filter(line => line.trim()).map(line => {
+        const data = line.split(',').map(d => d.trim().replace(/^"|"$/g, ''));
+        return headers.reduce((obj, nextKey, index) => {
+          obj[nextKey] = data[index] || '';
+          return obj;
+        }, {} as CsvRow);
+      });
+      setCsvRows(rows);
+
+      // Smart mapping
+      const newMapping: Record<ImportTargetField, string | null> = { name: null, username: null, password: null, url: null, notes: null };
+      for (const header of headers) {
+        const lowerHeader = header.toLowerCase();
+        if (lowerHeader.includes('name') || lowerHeader.includes('title')) newMapping.name = header;
+        if (lowerHeader.includes('user')) newMapping.username = header;
+        if (lowerHeader.includes('pass')) newMapping.password = header;
+        if (lowerHeader.includes('url') || lowerHeader.includes('website')) newMapping.url = header;
+        if (lowerHeader.includes('note')) newMapping.notes = header;
       }
-
-      setCsvFileName(file.name);
-      setCsvHeaders(parsed.headers);
-      setCsvRows(parsed.rows);
-      setMapping(suggestColumnMapping(parsed.headers));
-      setImportMessage(`Loaded ${parsed.rows.length} rows. Review and confirm the mapping.`);
-    } catch (e) {
-      console.error('Failed to parse CSV', e);
-      setImportError('Unable to read CSV file. Please verify the format.');
-      setCsvFileName('');
-      setCsvHeaders([]);
-      setCsvRows([]);
-    } finally {
-      event.target.value = '';
-    }
+      setMapping(newMapping);
+    };
+    reader.readAsText(file);
   };
 
-  const handleMappingChange = (field: ImportTargetField, header: string) => {
-    setMapping((current) => ({
-      ...current,
-      [field]: header === '__ignore__' ? null : header
-    }));
+  const handleMappingChange = (field: ImportTargetField, value: string) => {
+    setMapping(prev => ({ ...prev, [field]: value === '__ignore__' ? null : value }));
   };
+
+  useEffect(() => {
+    setMappingReady(Object.values(mapping).some(v => v !== null));
+  }, [mapping]);
 
   const handleImportCsv = async () => {
-    if (!user || !masterKey || csvRows.length === 0 || csvHeaders.length === 0) return;
-    if (!mappingReady) {
-      setImportError('Map Site/App, Username, and Password before import.');
+    if (!user || !masterKey) {
+      setImportError('You must be logged in and unlocked to import.');
+      return;
+    }
+    if (csvRows.length === 0 || !mappingReady) {
+      setImportError('No data to import or no fields mapped.');
       return;
     }
 
     setLoadingImport(true);
-    setImportError('');
-    setImportMessage('');
+    setImportError(null);
+    setImportMessage(null);
 
     try {
-      const { items, skippedRows } = mapCsvRowsToVaultItems(csvRows, csvHeaders, mapping);
+      const batch = writeBatch(db);
+      const passwordsRef = collection(db, 'users', user.uid, 'passwords');
 
-      if (items.length === 0) {
-        setImportError('No valid rows found after mapping.');
-        return;
-      }
+      csvRows.forEach(row => {
+        const newDocRef = doc(passwordsRef);
+        const encryptedData = {
+          name: encryptData(mapping.name ? row[mapping.name] ?? '' : '', masterKey),
+          username: encryptData(mapping.username ? row[mapping.username] ?? '' : '', masterKey),
+          password: encryptData(mapping.password ? row[mapping.password] ?? '' : '', masterKey),
+          url: encryptData(mapping.url ? row[mapping.url] ?? '' : '', masterKey),
+          notes: encryptData(mapping.notes ? row[mapping.notes] ?? '' : '', masterKey),
+          createdAt: new Date().toISOString(),
+        };
+        batch.set(newDocRef, encryptedData);
+      });
 
-      await Promise.all(
-        items.map(async (item) => {
-          const id = crypto.randomUUID();
-          const encryptedData = encryptData(JSON.stringify({ ...item, id }), masterKey);
-          const docRef = doc(db, `users/${user.uid}/vault`, id);
-          await setDoc(docRef, {
-            encryptedData,
-            updatedAt: serverTimestamp()
-          });
-        })
-      );
-
-      const skippedText = skippedRows > 0 ? ` (${skippedRows} rows skipped)` : '';
-      setImportMessage(`Imported ${items.length} entries successfully${skippedText}.`);
-    } catch (e) {
-      console.error('Import failed', e);
-      setImportError('Import failed. Please check the file and try again.');
+      await batch.commit();
+      setImportMessage(`${csvRows.length} items imported successfully!`);
+      // Reset CSV state
+      setCsvRows([]);
+      setCsvHeaders([]);
+      setCsvFileName(null);
+    } catch (error) {
+      console.error("Error importing CSV:", error);
+      setImportError('An error occurred during import. Please check the console.');
     } finally {
       setLoadingImport(false);
     }
   };
 
-  const handleChangeMasterPassword = async (event: React.FormEvent) => {
-    event.preventDefault();
-
-    if (!user || !masterKey) return;
-
-    setMasterPasswordError('');
-    setMasterPasswordMessage('');
-
-    if (!currentMasterPasswordInput || !newMasterPasswordInput || !confirmNewMasterPasswordInput) {
-      setMasterPasswordError('Fill in all master password fields.');
-      return;
-    }
-
-    if (newMasterPasswordInput.length < 8) {
-      setMasterPasswordError('New master password must be at least 8 characters.');
-      return;
-    }
+  const handleChangeMasterPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setMasterPasswordError(null);
+    setMasterPasswordMessage(null);
 
     if (newMasterPasswordInput !== confirmNewMasterPasswordInput) {
-      setMasterPasswordError('New master password and confirmation do not match.');
+      setMasterPasswordError("New passwords don't match.");
       return;
     }
-
-    const derivedCurrentKey = deriveKey(currentMasterPasswordInput, user.email);
-    if (derivedCurrentKey !== masterKey) {
-      setMasterPasswordError('Current master password is incorrect.');
+    if (!masterKey) {
+      setMasterPasswordError('Vault is not currently unlocked.');
       return;
     }
-
-    const newDerivedKey = deriveKey(newMasterPasswordInput, user.email);
 
     setLoadingMasterPasswordChange(true);
 
     try {
-      const q = query(collection(db, `users/${user.uid}/vault`));
-      const snap = await getDocs(q);
-
-      const docsToReEncrypt: Array<{ id: string; payload: string }> = [];
-      let unreadableCount = 0;
-
-      snap.forEach((docSnap) => {
-        const data = docSnap.data();
-        if (!data.encryptedData) {
-          unreadableCount += 1;
-          return;
-        }
-
-        const decryptedJson = decryptData(data.encryptedData, masterKey);
-        if (!decryptedJson) {
-          unreadableCount += 1;
-          return;
-        }
-
-        docsToReEncrypt.push({ id: docSnap.id, payload: decryptedJson });
-      });
-
-      if (unreadableCount > 0) {
-        setMasterPasswordError(
-          `Unable to decrypt ${unreadableCount} item(s) with the current key. Export/repair data first, then retry.`
-        );
+      // Verify current master password
+      const derivedKey = await deriveKey(user!.email!, currentMasterPasswordInput);
+      if (derivedKey !== masterKey) {
+        setMasterPasswordError('The current master password you entered is incorrect.');
+        setLoadingMasterPasswordChange(false);
         return;
       }
 
-      await Promise.all(
-        docsToReEncrypt.map(async ({ id, payload }) => {
-          const encryptedData = encryptData(payload, newDerivedKey);
-          const docRef = doc(db, `users/${user.uid}/vault`, id);
-          await setDoc(docRef, {
-            encryptedData,
-            updatedAt: serverTimestamp(),
-          });
-        })
-      );
+      // Derive new master key
+      const newKey = await deriveKey(user!.email!, newMasterPasswordInput);
 
-      setMasterKey(newDerivedKey);
+      // Get all documents
+      const passwordsRef = collection(db, 'users', user!.uid, 'passwords');
+      const querySnapshot = await getDocs(passwordsRef);
+
+      // Re-encrypt all data with the new key
+      const batch = writeBatch(db);
+      for (const document of querySnapshot.docs) {
+        const data = document.data();
+        const decrypted = {
+          name: decryptData(data.name, masterKey),
+          username: decryptData(data.username, masterKey),
+          password: decryptData(data.password, masterKey),
+          url: data.url ? decryptData(data.url, masterKey) : '',
+          notes: data.notes ? decryptData(data.notes, masterKey) : '',
+        };
+
+        const reEncrypted = {
+          name: encryptData(decrypted.name ?? '', newKey),
+          username: encryptData(decrypted.username ?? '', newKey),
+          password: encryptData(decrypted.password ?? '', newKey),
+          url: encryptData(decrypted.url ?? '', newKey),
+          notes: encryptData(decrypted.notes ?? '', newKey),
+        };
+        batch.update(document.ref, reEncrypted);
+      }
+
+      await batch.commit();
+
+      // Update the master key in the store
+      setMasterKey(newKey);
+      setMasterPasswordMessage('Master password changed successfully!');
       setCurrentMasterPasswordInput('');
       setNewMasterPasswordInput('');
       setConfirmNewMasterPasswordInput('');
-      setMasterPasswordMessage('Master password updated and vault re-encrypted successfully.');
+
     } catch (error) {
-      console.error('Failed to change master password', error);
-      setMasterPasswordError('Failed to change master password. Please try again.');
+      console.error("Error changing master password:", error);
+      setMasterPasswordError('An unexpected error occurred. Please try again.');
     } finally {
       setLoadingMasterPasswordChange(false);
     }
   };
 
-  const previewFields = (Object.keys(FIELD_LABELS) as ImportTargetField[]).filter((field) => Boolean(mapping[field]));
-
-  const previewRows = csvRows.slice(0, 3).map((row) => {
-    const mappedRow: Record<ImportTargetField, string> = {
-      siteName: '',
-      username: '',
-      password: '',
-      url: '',
-      notes: '',
-      favorite: ''
-    };
-
-    (Object.keys(FIELD_LABELS) as ImportTargetField[]).forEach((field) => {
+  const previewFields = (Object.keys(FIELD_LABELS) as ImportTargetField[]).filter(field => mapping[field]);
+  const previewRows = csvRows.slice(0, 3).map(row => {
+    const previewRow: Partial<Record<ImportTargetField, string>> = {};
+    for (const field of previewFields) {
       const header = mapping[field];
-      if (!header) return;
-
-      const headerIndex = csvHeaders.indexOf(header);
-      if (headerIndex < 0) return;
-      mappedRow[field] = row[headerIndex] ?? '';
-    });
-
-    return mappedRow;
-  });
-
-  const handleInstallApp = async () => {
-    if (installPromptEvent) {
-      setIsInstallFlowRunning(true);
-      try {
-        await installPromptEvent.prompt();
-        const { outcome } = await installPromptEvent.userChoice;
-        if (outcome === 'accepted') {
-          setInstallPromptEvent(null);
-        }
-      } finally {
-        setIsInstallFlowRunning(false);
+      if (header) {
+        previewRow[field] = row[header];
       }
-    } else {
-      alert(
-        'Automatic install prompt not available. Please use your browser’s menu to "Install app" or "Add to Home screen".'
-      );
     }
-  };
+    return previewRow;
+  });
 
   return (
     <div className="flex flex-col h-full gap-6">
@@ -384,7 +299,7 @@ export default function SettingsPage() {
         </h2>
 
         <div className="space-y-6">
-          {!isPwaInstalled && (
+          {!isInstalled && (
             <div className="p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl">
               <div>
                 <h3 className="font-semibold text-slate-200">Install App (PWA)</h3>
@@ -396,16 +311,16 @@ export default function SettingsPage() {
               <div className="mt-3 flex flex-wrap items-center gap-3">
                 <button
                   onClick={handleInstallApp}
-                  disabled={isInstallFlowRunning}
+                  disabled={isInstallFlowRunning || !canInstall}
                   className="bg-amber-500 hover:bg-amber-400 text-zinc-950 font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed min-w-[150px] justify-center whitespace-nowrap"
                 >
                   {isInstallFlowRunning ? <RefreshCcw className="w-4 h-4 animate-spin" /> : <Smartphone className="w-4 h-4" />}
                   {isInstallFlowRunning ? 'Opening...' : 'Install App'}
                 </button>
 
-                {!installPromptEvent && (
+                {!canInstall && (
                   <p className="text-xs text-zinc-500">
-                    If the browser does not show a prompt, open the menu and choose "Install app" or "Add to Home screen".
+                    Installation is not available, or the app is already installed.
                   </p>
                 )}
               </div>

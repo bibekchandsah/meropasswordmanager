@@ -53,3 +53,6 @@ allow user to login from google/manually email
 
 https://apps.microsoft.com/detail/9PF0ZF86W5HK?hl=en&gl=US&ocid=pdpshare
 https://resend.com/emails
+
+
+PWA searches for icon for proper functioning & showing in add to home screen

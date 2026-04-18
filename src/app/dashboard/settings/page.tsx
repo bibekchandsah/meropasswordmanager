@@ -3,10 +3,11 @@
 import { useState, useEffect } from 'react';
 import { useStore } from '@/store/useStore';
 import { useRouter } from 'next/navigation';
-import { collection, getDocs, doc, writeBatch } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { collection, getDocs, doc, writeBatch, deleteDoc } from 'firebase/firestore';
+import { db, auth } from '@/lib/firebase';
+import { deleteUser, reauthenticateWithCredential, EmailAuthProvider, GoogleAuthProvider, reauthenticateWithPopup } from 'firebase/auth';
 import { decryptData, encryptData, deriveKey } from '@/lib/crypto';
-import { Download, Upload, RefreshCcw, Trash2, User, ShieldAlert, Smartphone } from 'lucide-react';
+import { Download, Upload, RefreshCcw, Trash2, User, ShieldAlert, Smartphone, AlertTriangle, X } from 'lucide-react';
 import { usePwaInstall } from '@/hooks/usePwaInstall';
 
 type ImportTargetField = 'name' | 'username' | 'password' | 'url' | 'notes';
@@ -49,6 +50,13 @@ export default function SettingsPage() {
   const [masterPasswordMessage, setMasterPasswordMessage] = useState<string | null>(null);
   const [masterPasswordError, setMasterPasswordError] = useState<string | null>(null);
 
+  // Delete account state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');        // master password (both providers)
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [loadingDelete, setLoadingDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!user) {
       router.push('/auth');
@@ -62,7 +70,7 @@ export default function SettingsPage() {
     }
     setLoadingCsvExport(true);
     try {
-      const querySnapshot = await getDocs(collection(db, 'users', user.uid, 'passwords'));
+      const querySnapshot = await getDocs(collection(db, 'users', user.uid, 'vault'));
       const passwords = querySnapshot.docs.map(doc => {
         const data = doc.data();
         return {
@@ -155,7 +163,7 @@ export default function SettingsPage() {
 
     try {
       const batch = writeBatch(db);
-      const passwordsRef = collection(db, 'users', user.uid, 'passwords');
+      const passwordsRef = collection(db, 'users', user.uid, 'vault');
 
       csvRows.forEach(row => {
         const newDocRef = doc(passwordsRef);
@@ -202,7 +210,7 @@ export default function SettingsPage() {
 
     try {
       // Verify current master password
-      const derivedKey = await deriveKey(user!.email!, currentMasterPasswordInput);
+      const derivedKey = deriveKey(currentMasterPasswordInput, user!.email!);
       if (derivedKey !== masterKey) {
         setMasterPasswordError('The current master password you entered is incorrect.');
         setLoadingMasterPasswordChange(false);
@@ -210,10 +218,10 @@ export default function SettingsPage() {
       }
 
       // Derive new master key
-      const newKey = await deriveKey(user!.email!, newMasterPasswordInput);
+      const newKey = deriveKey(newMasterPasswordInput, user!.email!);
 
       // Get all documents
-      const passwordsRef = collection(db, 'users', user!.uid, 'passwords');
+      const passwordsRef = collection(db, 'users', user!.uid, 'vault');
       const querySnapshot = await getDocs(passwordsRef);
 
       // Re-encrypt all data with the new key
@@ -252,6 +260,71 @@ export default function SettingsPage() {
       setMasterPasswordError('An unexpected error occurred. Please try again.');
     } finally {
       setLoadingMasterPasswordChange(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!user || !auth.currentUser) {
+      setDeleteError('You must be logged in to delete your account.');
+      return;
+    }
+    if (deleteConfirmText !== 'DELETE') {
+      setDeleteError('Please type DELETE exactly to confirm.');
+      return;
+    }
+
+    setLoadingDelete(true);
+    setDeleteError(null);
+
+    try {
+      // Step 1: Verify master password locally
+      const derivedKey = deriveKey(deletePassword, user.email);
+      if (derivedKey !== masterKey) {
+        setDeleteError('Incorrect master password. Please try again.');
+        return;
+      }
+
+      // Step 2: Delete all vault documents from Firestore in batches
+      const passwordsRef = collection(db, 'users', user.uid, 'vault');
+      const snapshot = await getDocs(passwordsRef);
+
+      const chunks: typeof snapshot.docs[] = [];
+      for (let i = 0; i < snapshot.docs.length; i += 499) {
+        chunks.push(snapshot.docs.slice(i, i + 499));
+      }
+      for (const chunk of chunks) {
+        const batch = writeBatch(db);
+        chunk.forEach((d) => batch.delete(d.ref));
+        await batch.commit();
+      }
+
+      // Step 3: Delete the user document itself (if it exists)
+      await deleteDoc(doc(db, 'users', user.uid)).catch(() => {/* may not exist */});
+
+      // Step 4: Delete the Firebase Auth account
+      await deleteUser(auth.currentUser);
+
+      // Step 5: Clear local state and redirect
+      useStore.getState().logout();
+      router.push('/auth');
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code;
+      if (code === 'auth/requires-recent-login') {
+        setDeleteError('Security requirement: Please sign out, sign back in, and try deleting your account again.');
+      } else if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+        setDeleteError('Incorrect account password. Please try again.');
+      } else if (code === 'auth/too-many-requests') {
+        setDeleteError('Too many failed attempts. Please try again later.');
+      } else if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+        setDeleteError('Google sign-in was cancelled. Please try again.');
+      } else if (code === 'permission-denied') {
+        setDeleteError('Permission denied. Please update your Firestore security rules to allow delete operations for authenticated users.');
+      } else {
+        setDeleteError('An unexpected error occurred. Please try again.');
+        console.error('Delete account error:', err);
+      }
+    } finally {
+      setLoadingDelete(false);
     }
   };
 
@@ -518,11 +591,16 @@ export default function SettingsPage() {
           <div className="flex flex-col items-start gap-3 p-4 bg-red-500/5 border border-red-500/20 rounded-xl sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h3 className="font-semibold text-red-400">Danger Zone</h3>
-              <p className="text-sm text-zinc-400 max-w-md">Delete your account and wipe all stored vault data permanently.</p>
+              <p className="text-sm text-zinc-400 max-w-md">Delete your account and wipe all stored vault data permanently. This action cannot be undone.</p>
             </div>
             
             <button 
-              onClick={() => alert("Manual account deletion hasn't been enabled in the MVP demo, please clear Firestore in your Firebase Console.")}
+              onClick={() => {
+                setShowDeleteModal(true);
+                setDeletePassword('');
+                setDeleteConfirmText('');
+                setDeleteError(null);
+              }}
               className="bg-red-500/10 hover:bg-red-500 hover:text-white border border-red-500/50 text-red-500 font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all whitespace-nowrap"
             >
               <Trash2 className="w-4 h-4" />
@@ -531,6 +609,103 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+
+      {/* Delete Account Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-zinc-900 border border-red-500/30 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-red-500/15 flex items-center justify-center flex-shrink-0">
+                  <AlertTriangle className="w-5 h-5 text-red-400" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-red-400">Delete Account</h2>
+                  <p className="text-xs text-zinc-500">This action is permanent and irreversible</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                disabled={loadingDelete}
+                className="text-zinc-500 hover:text-zinc-300 transition-colors p-1 rounded-lg hover:bg-zinc-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
+                <p className="text-sm text-red-300">
+                  The following will be <span className="font-semibold">permanently deleted</span>:
+                </p>
+                <ul className="mt-2 space-y-1 text-xs text-red-300/80 list-disc list-inside">
+                  <li>All passwords stored in your vault</li>
+                  <li>Your account and login credentials</li>
+                  <li>All associated data — nothing can be recovered</li>
+                </ul>
+              </div>
+
+              <div>
+                <label className="text-xs text-zinc-400 block mb-1">
+                  Vault Master Password
+                </label>
+                <input
+                  type="password"
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
+                  placeholder="Your vault master password"
+                  disabled={loadingDelete}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-2 px-3 text-sm text-slate-200 outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-zinc-400 block mb-1">
+                  Type <span className="font-mono font-bold text-red-400">DELETE</span> to confirm
+                </label>
+                <input
+                  type="text"
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  placeholder="DELETE"
+                  disabled={loadingDelete}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-2 px-3 text-sm text-slate-200 outline-none focus:ring-2 focus:ring-red-500 font-mono disabled:opacity-50"
+                />
+              </div>
+
+              {deleteError && (
+                <div className="rounded-xl border border-red-500/30 bg-red-500/10 text-red-300 px-3 py-2 text-sm">
+                  {deleteError}
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-1">
+                <button
+                  onClick={() => setShowDeleteModal(false)}
+                  disabled={loadingDelete}
+                  className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold py-2.5 px-4 rounded-xl transition-all disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteAccount}
+                  disabled={
+                    loadingDelete ||
+                    deleteConfirmText !== 'DELETE' ||
+                    !deletePassword
+                  }
+                  className="flex-1 bg-red-600 hover:bg-red-500 disabled:bg-red-900/50 text-white font-semibold py-2.5 px-4 rounded-xl inline-flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loadingDelete ? (
+                    <><RefreshCcw className="w-4 h-4 animate-spin" /> Deleting...</>
+                  ) : (
+                    <><Trash2 className="w-4 h-4" /> Delete Forever</>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

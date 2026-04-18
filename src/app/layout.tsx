@@ -103,6 +103,15 @@ export default function RootLayout({
         <meta name="theme-color" content="#ffffff" />
       </head>
       <body className="min-h-full flex flex-col bg-[var(--background)] text-[var(--foreground)] transition-colors duration-200">
+        <Script id="pwa-capture" strategy="beforeInteractive">
+          {`
+            window.pwaDeferredPrompt = null;
+            window.addEventListener('beforeinstallprompt', (e) => {
+              e.preventDefault();
+              window.pwaDeferredPrompt = e;
+            });
+          `}
+        </Script>
         <Script id="theme-init" strategy="beforeInteractive">
           {`(function(){try{var stored=localStorage.getItem('meropasswordmanager-theme');var prefersLight=window.matchMedia('(prefers-color-scheme: light)').matches;var theme=stored==='light'||stored==='dark'?stored:(prefersLight?'light':'dark');document.documentElement.dataset.theme=theme;document.documentElement.style.colorScheme=theme;}catch(e){document.documentElement.dataset.theme='dark';document.documentElement.style.colorScheme='dark';}})();`}
         </Script>

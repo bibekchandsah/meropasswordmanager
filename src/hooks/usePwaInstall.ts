@@ -36,6 +36,11 @@ export function usePwaInstall() {
 
     if (typeof window !== 'undefined') {
       checkInitialState();
+      
+      if ((window as any).pwaDeferredPrompt) {
+        handleBeforeInstallPrompt((window as any).pwaDeferredPrompt);
+      }
+
       window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.addEventListener('appinstalled', handleAppInstalled);
     }

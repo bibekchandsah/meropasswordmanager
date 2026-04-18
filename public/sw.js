@@ -1,4 +1,4 @@
-const CACHE_NAME = 'meropasswordmanager-cache-v1';
+const CACHE_NAME = 'meropasswordmanager-cache-v2';
 const OFFLINE_URL = '/';
 
 self.addEventListener('install', (event) => {

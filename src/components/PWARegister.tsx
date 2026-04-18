@@ -25,11 +25,12 @@ export default function PWARegister() {
       }
     };
 
-    window.addEventListener('load', registerServiceWorker);
-
-    return () => {
-      window.removeEventListener('load', registerServiceWorker);
-    };
+    if (document.readyState === 'complete') {
+      registerServiceWorker();
+    } else {
+      window.addEventListener('load', registerServiceWorker);
+      return () => window.removeEventListener('load', registerServiceWorker);
+    }
   }, []);
 
   return null;

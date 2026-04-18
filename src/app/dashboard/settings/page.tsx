@@ -334,7 +334,10 @@ export default function SettingsPage() {
   });
 
   const handleInstallApp = async () => {
-    if (!installPromptEvent) return;
+    if (!installPromptEvent) {
+      alert('Install is not available in this browser yet. Use the browser menu and choose Install app or Add to Home screen.');
+      return;
+    }
 
     setIsInstallFlowRunning(true);
 
@@ -394,7 +397,7 @@ export default function SettingsPage() {
               <div className="mt-3 flex flex-wrap items-center gap-3">
                 <button
                   onClick={handleInstallApp}
-                  disabled={!installPromptEvent || isInstallFlowRunning}
+                  disabled={isInstallFlowRunning}
                   className="bg-amber-500 hover:bg-amber-400 text-zinc-950 font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed min-w-[150px] justify-center whitespace-nowrap"
                 >
                   {isInstallFlowRunning ? <RefreshCcw className="w-4 h-4 animate-spin" /> : <Smartphone className="w-4 h-4" />}
@@ -403,7 +406,7 @@ export default function SettingsPage() {
 
                 {!installPromptEvent ? (
                   <p className="text-xs text-zinc-500">
-                    If the button is disabled, open your browser menu and choose "Install app" or "Add to Home screen".
+                    If the browser does not show a prompt, open the menu and choose "Install app" or "Add to Home screen".
                   </p>
                 ) : null}
               </div>

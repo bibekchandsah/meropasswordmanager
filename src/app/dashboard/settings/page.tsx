@@ -334,22 +334,21 @@ export default function SettingsPage() {
   });
 
   const handleInstallApp = async () => {
-    if (!installPromptEvent) {
-      alert('Install is not available in this browser yet. Use the browser menu and choose Install app or Add to Home screen.');
-      return;
-    }
-
-    setIsInstallFlowRunning(true);
-
-    try {
-      await installPromptEvent.prompt();
-      const result = await installPromptEvent.userChoice;
-
-      if (result.outcome === 'accepted') {
-        setInstallPromptEvent(null);
+    if (installPromptEvent) {
+      setIsInstallFlowRunning(true);
+      try {
+        await installPromptEvent.prompt();
+        const { outcome } = await installPromptEvent.userChoice;
+        if (outcome === 'accepted') {
+          setInstallPromptEvent(null);
+        }
+      } finally {
+        setIsInstallFlowRunning(false);
       }
-    } finally {
-      setIsInstallFlowRunning(false);
+    } else {
+      alert(
+        'Automatic install prompt not available. Please use your browser’s menu to "Install app" or "Add to Home screen".'
+      );
     }
   };
 
@@ -385,7 +384,7 @@ export default function SettingsPage() {
         </h2>
 
         <div className="space-y-6">
-          {!isPwaInstalled ? (
+          {!isPwaInstalled && (
             <div className="p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl">
               <div>
                 <h3 className="font-semibold text-slate-200">Install App (PWA)</h3>
@@ -404,14 +403,14 @@ export default function SettingsPage() {
                   {isInstallFlowRunning ? 'Opening...' : 'Install App'}
                 </button>
 
-                {!installPromptEvent ? (
+                {!installPromptEvent && (
                   <p className="text-xs text-zinc-500">
                     If the browser does not show a prompt, open the menu and choose "Install app" or "Add to Home screen".
                   </p>
-                ) : null}
+                )}
               </div>
             </div>
-          ) : null}
+          )}
 
           <div className="p-4 bg-blue-500/5 border border-blue-500/20 rounded-xl">
             <div>

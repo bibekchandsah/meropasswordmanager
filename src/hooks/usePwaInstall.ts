@@ -27,17 +27,24 @@ export function usePwaInstall() {
       setInstallPromptEvent(null);
     };
 
-    // Check initial state
-    if (typeof window !== 'undefined' && window.matchMedia('(display-mode: standalone)').matches) {
-      setIsPwaInstalled(true);
+    const checkInitialState = () => {
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+      const isBrowser = (window.navigator as any).standalone === false; // Safari on iOS
+      const isPwa = isStandalone || isBrowser;
+      setIsPwaInstalled(isPwa);
     }
 
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    window.addEventListener('appinstalled', handleAppInstalled);
+    if (typeof window !== 'undefined') {
+      checkInitialState();
+      window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.addEventListener('appinstalled', handleAppInstalled);
+    }
 
     return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-      window.removeEventListener('appinstalled', handleAppInstalled);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+        window.removeEventListener('appinstalled', handleAppInstalled);
+      }
     };
   }, []);
 

@@ -74,8 +74,15 @@ export default function AuthForm() {
 
       router.push('/dashboard');
     } catch (err: any) {
-      console.error(err);
-      setError(err.message || 'An error occurred during authentication.');
+      if (err?.code === 'auth/invalid-credential') {
+        setError('Incorrect email or account password.');
+      } else if (err?.code === 'auth/email-already-in-use') {
+        setError('An account with this email already exists.');
+      } else if (err?.code === 'auth/too-many-requests') {
+        setError('Too many failed login attempts. Please try again later.');
+      } else {
+        setError(err.message || 'An error occurred during authentication.');
+      }
     } finally {
       setLoading(false);
     }
@@ -113,7 +120,6 @@ export default function AuthForm() {
 
       router.push('/dashboard');
     } catch (err: any) {
-      console.error(err);
       setError(err.message || 'Google sign-in failed.');
     } finally {
       setLoading(false);
@@ -137,7 +143,6 @@ export default function AuthForm() {
       await sendPasswordResetEmail(auth, email.trim());
       setNotice('Password reset email sent. Check your inbox or spam to set a new password.');
     } catch (err: any) {
-      console.error(err);
       setError(err.message || 'Failed to send password reset email.');
     } finally {
       setLoading(false);

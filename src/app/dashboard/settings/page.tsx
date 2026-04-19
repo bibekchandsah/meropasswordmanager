@@ -3,14 +3,14 @@
 import { useState, useEffect } from 'react';
 import { useStore } from '@/store/useStore';
 import { useRouter } from 'next/navigation';
-import { collection, getDocs, doc, writeBatch, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, writeBatch, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase';
 import { deleteUser, reauthenticateWithCredential, EmailAuthProvider, GoogleAuthProvider, reauthenticateWithPopup } from 'firebase/auth';
 import { decryptData, encryptData, deriveKey } from '@/lib/crypto';
 import { Download, Upload, RefreshCcw, Trash2, User, ShieldAlert, Smartphone, AlertTriangle, X } from 'lucide-react';
 import { usePwaInstall } from '@/hooks/usePwaInstall';
 
-type ImportTargetField = 'name' | 'username' | 'password' | 'url' | 'notes';
+type ImportTargetField = 'name' | 'username' | 'password' | 'url' | 'notes' | 'favorite' | 'createdAt' | 'updatedAt';
 
 const FIELD_LABELS: Record<ImportTargetField, string> = {
   name: 'Name / Title',
@@ -18,6 +18,9 @@ const FIELD_LABELS: Record<ImportTargetField, string> = {
   password: 'Password',
   url: 'URL / Website',
   notes: 'Notes',
+  favorite: 'Favorite',
+  createdAt: 'Created At',
+  updatedAt: 'Updated At',
 };
 
 type CsvRow = Record<string, string>;
@@ -36,6 +39,9 @@ export default function SettingsPage() {
     password: null,
     url: null,
     notes: null,
+    favorite: null,
+    createdAt: null,
+    updatedAt: null,
   });
   const [mappingReady, setMappingReady] = useState(false);
   const [loadingImport, setLoadingImport] = useState(false);
@@ -73,19 +79,33 @@ export default function SettingsPage() {
       const querySnapshot = await getDocs(collection(db, 'users', user.uid, 'vault'));
       const passwords = querySnapshot.docs.map(doc => {
         const data = doc.data();
-        return {
-          name: decryptData(data.name, masterKey),
-          username: decryptData(data.username, masterKey),
-          password: decryptData(data.password, masterKey),
-          url: data.url ? decryptData(data.url, masterKey) : '',
-          notes: data.notes ? decryptData(data.notes, masterKey) : '',
-        };
-      });
+        if (data.encryptedData) {
+          const decryptedJson = decryptData(data.encryptedData, masterKey);
+          if (decryptedJson) {
+            try {
+              const parsed = JSON.parse(decryptedJson);
+              return {
+                name: parsed.siteName || parsed.name || '',
+                username: parsed.username || '',
+                password: parsed.password || '',
+                url: parsed.url || '',
+                notes: parsed.notes || '',
+                favorite: parsed.favorite ? 'true' : 'false',
+                createdAt: parsed.createdAt ? new Date(parsed.createdAt).toISOString() : '',
+                updatedAt: parsed.updatedAt ? new Date(parsed.updatedAt).toISOString() : '',
+              };
+            } catch {
+              // block
+            }
+          }
+        }
+        return null;
+      }).filter(Boolean) as Record<string, string>[];
 
-      const headers = ['name', 'username', 'password', 'url', 'notes'];
+      const headers = ['name', 'username', 'password', 'url', 'notes', 'favorite', 'createdAt', 'updatedAt'];
       const csvContent = [
         headers.join(','),
-        ...passwords.map(p => headers.map(h => `"${(p[h as keyof typeof p] ?? '').replace(/"/g, '""')}"`).join(','))
+        ...passwords.map(p => headers.map(h => `"${(p[h] ?? '').replace(/"/g, '""')}"`).join(','))
       ].join('\n');
 
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-s8;' });
@@ -125,7 +145,7 @@ export default function SettingsPage() {
       setCsvRows(rows);
 
       // Smart mapping
-      const newMapping: Record<ImportTargetField, string | null> = { name: null, username: null, password: null, url: null, notes: null };
+      const newMapping: Record<ImportTargetField, string | null> = { name: null, username: null, password: null, url: null, notes: null, favorite: null, createdAt: null, updatedAt: null };
       for (const header of headers) {
         const lowerHeader = header.toLowerCase();
         if (lowerHeader.includes('name') || lowerHeader.includes('title')) newMapping.name = header;
@@ -133,6 +153,9 @@ export default function SettingsPage() {
         if (lowerHeader.includes('pass')) newMapping.password = header;
         if (lowerHeader.includes('url') || lowerHeader.includes('website')) newMapping.url = header;
         if (lowerHeader.includes('note')) newMapping.notes = header;
+        if (lowerHeader.includes('favor') || lowerHeader.includes('star')) newMapping.favorite = header;
+        if (lowerHeader.includes('created')) newMapping.createdAt = header;
+        if (lowerHeader.includes('updated')) newMapping.updatedAt = header;
       }
       setMapping(newMapping);
     };
@@ -167,15 +190,41 @@ export default function SettingsPage() {
 
       csvRows.forEach(row => {
         const newDocRef = doc(passwordsRef);
-        const encryptedData = {
-          name: encryptData(mapping.name ? row[mapping.name] ?? '' : '', masterKey),
-          username: encryptData(mapping.username ? row[mapping.username] ?? '' : '', masterKey),
-          password: encryptData(mapping.password ? row[mapping.password] ?? '' : '', masterKey),
-          url: encryptData(mapping.url ? row[mapping.url] ?? '' : '', masterKey),
-          notes: encryptData(mapping.notes ? row[mapping.notes] ?? '' : '', masterKey),
-          createdAt: new Date().toISOString(),
+        
+        let isFavorite = false;
+        if (mapping.favorite && row[mapping.favorite]) {
+           const favStr = row[mapping.favorite].toLowerCase().trim();
+           isFavorite = favStr === 'true' || favStr === '1' || favStr === 'yes';
+        }
+
+        let createdAtDate = Date.now();
+        if (mapping.createdAt && row[mapping.createdAt]) {
+           const parsedDate = Date.parse(row[mapping.createdAt]);
+           if (!isNaN(parsedDate)) createdAtDate = parsedDate;
+        }
+
+        let updatedAtDate = Date.now();
+        if (mapping.updatedAt && row[mapping.updatedAt]) {
+           const parsedDate = Date.parse(row[mapping.updatedAt]);
+           if (!isNaN(parsedDate)) updatedAtDate = parsedDate;
+        }
+
+        const vaultItem = {
+          id: newDocRef.id,
+          siteName: mapping.name ? row[mapping.name] ?? '' : '',
+          username: mapping.username ? row[mapping.username] ?? '' : '',
+          password: mapping.password ? row[mapping.password] ?? '' : '',
+          url: mapping.url ? row[mapping.url] ?? '' : '',
+          notes: mapping.notes ? row[mapping.notes] ?? '' : '',
+          favorite: isFavorite,
+          createdAt: createdAtDate,
+          updatedAt: updatedAtDate,
         };
-        batch.set(newDocRef, encryptedData);
+        const encryptedData = encryptData(JSON.stringify(vaultItem), masterKey);
+        batch.set(newDocRef, {
+          encryptedData,
+          updatedAt: serverTimestamp()
+        });
       });
 
       await batch.commit();
@@ -228,22 +277,16 @@ export default function SettingsPage() {
       const batch = writeBatch(db);
       for (const document of querySnapshot.docs) {
         const data = document.data();
-        const decrypted = {
-          name: decryptData(data.name, masterKey),
-          username: decryptData(data.username, masterKey),
-          password: decryptData(data.password, masterKey),
-          url: data.url ? decryptData(data.url, masterKey) : '',
-          notes: data.notes ? decryptData(data.notes, masterKey) : '',
-        };
-
-        const reEncrypted = {
-          name: encryptData(decrypted.name ?? '', newKey),
-          username: encryptData(decrypted.username ?? '', newKey),
-          password: encryptData(decrypted.password ?? '', newKey),
-          url: encryptData(decrypted.url ?? '', newKey),
-          notes: encryptData(decrypted.notes ?? '', newKey),
-        };
-        batch.update(document.ref, reEncrypted);
+        if (data.encryptedData) {
+          const decryptedJson = decryptData(data.encryptedData, masterKey);
+          if (decryptedJson) {
+            const reEncryptedData = encryptData(decryptedJson, newKey);
+            batch.update(document.ref, {
+              encryptedData: reEncryptedData,
+              updatedAt: serverTimestamp()
+            });
+          }
+        }
       }
 
       await batch.commit();

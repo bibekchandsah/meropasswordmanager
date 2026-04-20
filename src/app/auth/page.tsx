@@ -1,14 +1,25 @@
 'use client';
 
-import { useState } from 'react';
-import { useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, sendPasswordResetEmail } from 'firebase/auth';
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  GoogleAuthProvider,
+  signInWithPopup,
+  sendPasswordResetEmail,
+} from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { deriveKey } from '@/lib/crypto';
+import { saveRecoveryBlob } from '@/lib/recovery';
 import { useStore } from '@/store/useStore';
+import {
+  isPasskeySupported,
+  isPasskeyRegistered,
+  authenticateWithPasskey,
+} from '@/lib/passkey';
 import { motion } from 'framer-motion';
-import { Lock, Mail, KeyRound, Loader2 } from 'lucide-react';
+import { Lock, Mail, KeyRound, Loader2, Fingerprint } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 
 export default function AuthForm() {
@@ -17,13 +28,20 @@ export default function AuthForm() {
   const [accountPassword, setAccountPassword] = useState('');
   const [masterPassword, setMasterPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [passkeyLoading, setPasskeyLoading] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [showForgotPasswordWarning, setShowForgotPasswordWarning] = useState(false);
+  const [passkeyAvailable, setPasskeyAvailable] = useState(false);
+  const [forgotMasterLoading, setForgotMasterLoading] = useState(false);
 
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { setUser, setMasterKey } = useStore();
+  const { setUser, setMasterKey, setMasterPassword: storeMasterPassword } = useStore();
+
+  useEffect(() => {
+    setPasskeyAvailable(isPasskeySupported());
+  }, []);
 
   useEffect(() => {
     const mode = searchParams.get('mode');
@@ -61,27 +79,32 @@ export default function AuthForm() {
       }
 
       const accountEmail = userCredential.user.email || email;
-
-      // Zero-knowledge key derivation using email as salt
       const derivedKey = deriveKey(masterPassword, accountEmail);
-      
+
       setUser({
         uid: userCredential.user.uid,
         email: accountEmail,
         photoURL: userCredential.user.photoURL,
       });
       setMasterKey(derivedKey);
+      storeMasterPassword(masterPassword);
+
+      // Save encrypted recovery blob so "forgot master password" works later
+      saveRecoveryBlob(userCredential.user.uid, accountPassword, masterPassword).catch(() => {
+        // Non-critical — don't block login if this fails
+      });
 
       router.push('/dashboard');
-    } catch (err: any) {
-      if (err?.code === 'auth/invalid-credential') {
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code;
+      if (code === 'auth/invalid-credential') {
         setError('Incorrect email or account password.');
-      } else if (err?.code === 'auth/email-already-in-use') {
+      } else if (code === 'auth/email-already-in-use') {
         setError('An account with this email already exists.');
-      } else if (err?.code === 'auth/too-many-requests') {
+      } else if (code === 'auth/too-many-requests') {
         setError('Too many failed login attempts. Please try again later.');
       } else {
-        setError(err.message || 'An error occurred during authentication.');
+        setError((err as Error).message || 'An error occurred during authentication.');
       }
     } finally {
       setLoading(false);
@@ -108,7 +131,6 @@ export default function AuthForm() {
         return;
       }
 
-      // Keep zero-knowledge design: derive key from user-provided master password.
       const derivedKey = deriveKey(masterPassword, accountEmail);
 
       setUser({
@@ -117,12 +139,126 @@ export default function AuthForm() {
         photoURL: userCredential.user.photoURL,
       });
       setMasterKey(derivedKey);
+      storeMasterPassword(masterPassword);
+
+      // Save encrypted recovery blob — for Google auth we use masterPassword as
+      // both the vault key source and the recovery key source (no account password)
+      saveRecoveryBlob(userCredential.user.uid, masterPassword, masterPassword).catch(() => {});
 
       router.push('/dashboard');
-    } catch (err: any) {
-      setError(err.message || 'Google sign-in failed.');
+    } catch (err: unknown) {
+      setError((err as Error).message || 'Google sign-in failed.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  /**
+   * Passkey login flow:
+   * 1. Sign in to Firebase with email + account password (account auth).
+   * 2. Use WebAuthn to retrieve the stored master password.
+   * 3. Derive the vault key and unlock the dashboard.
+   *
+   * The user still needs their account password here because Firebase Auth
+   * requires it.  The passkey eliminates the need to remember the *master*
+   * password (the harder one to remember).
+   *
+   * For a fully passwordless experience the user would need to use Google
+   * Sign-In (which handles account auth via OAuth) combined with passkey for
+   * the master password.
+   */
+  const handlePasskeyLogin = async () => {
+    if (!email.trim()) {
+      setError('Enter your email address first so we can find your passkey.');
+      return;
+    }
+    if (!accountPassword.trim()) {
+      setError('Enter your account password. Your passkey will handle the vault master password.');
+      return;
+    }
+
+    setPasskeyLoading(true);
+    setError('');
+    setNotice('');
+
+    try {
+      // Step 1: Firebase account auth
+      const userCredential = await signInWithEmailAndPassword(auth, email, accountPassword);
+      const accountEmail = userCredential.user.email || email;
+      const uid = userCredential.user.uid;
+
+      // Step 2: Check passkey is registered on this device
+      if (!isPasskeyRegistered(uid)) {
+        setError('No passkey found on this device. Sign in with your master password and enable passkey in Settings.');
+        return;
+      }
+
+      // Step 3: WebAuthn assertion → get master password
+      const decryptedMasterPassword = await authenticateWithPasskey(uid);
+
+      // Step 4: Derive vault key and unlock
+      const derivedKey = deriveKey(decryptedMasterPassword, accountEmail);
+
+      setUser({
+        uid,
+        email: accountEmail,
+        photoURL: userCredential.user.photoURL,
+      });
+      setMasterKey(derivedKey);
+      storeMasterPassword(decryptedMasterPassword);
+
+      router.push('/dashboard');
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code;
+      if (code === 'auth/invalid-credential') {
+        setError('Incorrect email or account password.');
+      } else if (code === 'auth/too-many-requests') {
+        setError('Too many failed login attempts. Please try again later.');
+      } else {
+        const msg = (err as Error).message || '';
+        if (msg.toLowerCase().includes('cancel') || msg.toLowerCase().includes('abort')) {
+          setError('Passkey authentication was cancelled.');
+        } else {
+          setError(msg || 'Passkey authentication failed.');
+        }
+      }
+    } finally {
+      setPasskeyLoading(false);
+    }
+  };
+
+  const handleForgotMasterPassword = async () => {
+    if (!email.trim()) {
+      setError('Enter your email address first.');
+      return;
+    }
+    if (!accountPassword.trim()) {
+      setError('Enter your account password — it is needed to decrypt your recovery data.');
+      return;
+    }
+
+    setForgotMasterLoading(true);
+    setError('');
+    setNotice('');
+
+    try {
+      const res = await fetch('/api/forgot-master-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), accountPassword }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || 'Failed to send recovery email.');
+      } else {
+        setNotice(`Recovery email sent to ${email.trim()}. Check your inbox (and spam folder).`);
+      }
+    } catch {
+      setError('Network error. Please try again.');
+    } finally {
+      setForgotMasterLoading(false);
     }
   };
 
@@ -142,19 +278,21 @@ export default function AuthForm() {
     try {
       await sendPasswordResetEmail(auth, email.trim());
       setNotice('Password reset email sent. Check your inbox or spam to set a new password.');
-    } catch (err: any) {
-      setError(err.message || 'Failed to send password reset email.');
+    } catch (err: unknown) {
+      setError((err as Error).message || 'Failed to send password reset email.');
     } finally {
       setLoading(false);
     }
   };
+
+  const isAnyLoading = loading || passkeyLoading || forgotMasterLoading;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[var(--background)] text-[var(--foreground)] p-4 transition-colors duration-200">
       <div className="fixed right-4 top-4 z-10">
         <ThemeToggle />
       </div>
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl shadow-xl p-8"
@@ -169,7 +307,7 @@ export default function AuthForm() {
           {isLogin ? 'Welcome Back' : 'Create Secure Vault'}
         </h2>
         <p className="text-zinc-400 text-center mb-8 text-sm">
-          {isLogin 
+          {isLogin
             ? 'Enter your master password to decrypt your vault.'
             : 'Your master password is never stored on our servers.'}
         </p>
@@ -199,8 +337,8 @@ export default function AuthForm() {
             <label className="block text-sm font-medium text-zinc-400 mb-1">Email Address</label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
-              <input 
-                type="email" 
+              <input
+                type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -216,8 +354,8 @@ export default function AuthForm() {
             </label>
             <div className="relative">
               <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
-              <input 
-                type="password" 
+              <input
+                type="password"
                 value={accountPassword}
                 onChange={(e) => setAccountPassword(e.target.value)}
                 required
@@ -231,7 +369,7 @@ export default function AuthForm() {
                 <button
                   type="button"
                   onClick={handleForgotPassword}
-                  disabled={loading}
+                  disabled={isAnyLoading}
                   className="text-xs text-zinc-400 hover:text-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Forgot password?
@@ -264,11 +402,26 @@ export default function AuthForm() {
             <p className="mt-1 text-xs text-zinc-500">
               Keep this same after account password resets to access existing vault entries.
             </p>
+            {isLogin ? (
+              <div className="mt-2 text-right">
+                <button
+                  type="button"
+                  onClick={handleForgotMasterPassword}
+                  disabled={isAnyLoading}
+                  className="text-xs text-zinc-400 hover:text-sky-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1"
+                >
+                  {forgotMasterLoading ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : null}
+                  Forgot master password?
+                </button>
+              </div>
+            ) : null}
           </div>
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={isAnyLoading}
             className="w-full bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-semibold py-3 rounded-xl flex justify-center items-center transition-all disabled:opacity-50 disabled:cursor-not-allowed mt-6"
           >
             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (isLogin ? 'Decrypt & Sign In' : 'Create Vault')}
@@ -283,10 +436,27 @@ export default function AuthForm() {
             </div>
           </div>
 
+          {/* Passkey login — only shown on login screen when WebAuthn is available */}
+          {isLogin && passkeyAvailable ? (
+            <button
+              type="button"
+              onClick={handlePasskeyLogin}
+              disabled={isAnyLoading}
+              className="w-full bg-violet-600 hover:bg-violet-500 text-white font-semibold py-3 rounded-xl flex justify-center items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {passkeyLoading ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Fingerprint className="w-5 h-5" />
+              )}
+              Sign in with Passkey
+            </button>
+          ) : null}
+
           <button
             type="button"
             onClick={handleGoogleAuth}
-            disabled={loading}
+            disabled={isAnyLoading}
             className="w-full bg-zinc-800 hover:bg-zinc-700 text-slate-100 font-semibold py-3 rounded-xl flex justify-center items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? (
@@ -316,7 +486,7 @@ export default function AuthForm() {
         </form>
 
         <div className="mt-6 text-center">
-          <button 
+          <button
             onClick={() => {
               setIsLogin(!isLogin);
               setError('');

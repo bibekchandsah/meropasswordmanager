@@ -48,6 +48,375 @@ delete account after verifying
 logout 
 
 
+Tech Stack Setup: Bootstrapped Next.js with tailwindcss, lucide-react, framer-motion, and configured eslint/typescript.
+Crypto & Zero-Knowledge Architecture: Implemented crypto.ts utilizing crypto-js with PBKDF2 Key Derivation (100k iterations with SHA256) and AES-256 Encryption/Decryption.
+Database & Auth (Serverless): Configured Firebase Auth & Firestore in firebase.ts. No plaintext passwords will leave the browser—Firebase will only store the securely encrypted vaulted data strings using your derived masterKey.
+State Management: Created a secure in-memory Zustand store (useStore.ts) to handle the user session and ensuring the masterKey is temporarily held in memory but never persisted into LocalStorage/Firestore.
+
+Auth UI & Logic: Sign in/Register screens, handling the Master Password to derive the crypto-key and authenticate via Firebase Auth.
+Dashboard / Vault View: The protected UI featuring Framer Motion, vault rendering, and search mapping.
+CRUD Features: Securely creating, updating, and deleting vault item documents in Firebase directly via the client (encrypted JSON payloads).
+Settings & PWA: Setting up manifest.json, local offline features, password generic tools, and profile settings.
+Hooked up Next.js root (/) to intelligently redirect to the Dashboard assuming both user and masterKey exist.
+
+Vault Main Page (page.tsx): Connects right to Firebase Firestore. It listens to a live stream of data (onSnapshot) and decrypts the encrypted string blobs seamlessly using your derived masterKey dynamically on the client, rendering the vault instantly.
+Secure Password Generator (passwordGen.ts): Built-in generator algorithm running purely inside the form modal, creating highly secure randomized keys stringing symbols, numbers, and case characters.
+
+Settings / Export View (page.tsx): Built a clean account details view that offers a secure vault export function. When clicked, it pulls the encrypted Firebase vault, locally decrypts each document back into a standard VaultItem array, and creates an on-the-fly downloadable JSON blob for the user.
+PWA Support:
+    Created manifest.json setting up standard parameters, dark theme coloration, and standalone modes.
+    Created a basic offline Cache Service Worker (sw.js).
+    Implemented a wrapper component (PWARegister.tsx) to seamlessly load the service worker and injected the standard metadata/manifest headers in layout.tsx.
+    The PWA manifest dictates icon files, but they didn't exist in the public directory. I've automatically generated placeholder icon-192x192.png and icon-512x512.png files to resolve the warnings. You can replace these files later traversing into your public folder with your app's actual logo.
+
+firebase rule:
+    Go to your Firebase Console.
+    Select your project -> Firestore Database -> Rules tab.
+    Replace the entire rules block with this code to enforce that only logged-in users can write their specific user nodes:
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      
+      match /vault/{document=**} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+  }
+}
+
+favicon:
+Favicon resolution now uses the full URL (not just hostname), which is important for GitHub Pages project URLs like /Homepage/.
+Try direct site files first:
+    <full-url>/favicon.ico
+    <full-url>/favicon.png
+    <full-url>/apple-touch-icon.png
+    <origin><pathname>/favicon.ico (important for /Homepage/)
+    <origin>/favicon.ico, etc.
+Only then fall back to providers:
+    icon.horse
+    unavatar (with fallback=false)
+    duckduckgo
+    google s2 last
+Vault card now passes item.url directly to the favicon component.
+Also fixed the corrupted masked password characters in the card.
+server-side HEAD probe chain: The API now probes a series of reliable favicon CDN services server-side using HEAD requests (no CORS issues), in this order:
+Google S2 — most reliable, extremely fast
+DuckDuckGo — good coverage of obscure domains
+icon.horse — catches what the others miss
+Direct /favicon.ico / /favicon.png — last resort
+The first probe that returns a valid image/* content-type wins and gets returned. This works for any domain regardless of whether it's a SPA or server-rendered.
+
+password strength:
+What it now does while typing password:
+    Shows one of: Weak, Normal, Medium, Strong
+    Displays a 4-segment strength meter below the password field
+    Updates in real time as the user types or generates a password
+Scoring checks include:
+    length (8+, 12+)
+    mixed uppercase/lowercase
+    number
+    symbol
+
+Desktop sidebar is now collapsible with a toggle button.
+Mobile sidebar is now show/hide with:
+    menu button in header to open
+    overlay click to close
+    close icon button inside drawer
+Sidebar nav still highlights active page correctly.
+Logout remains available in both desktop and mobile sidebars.
+
+Added a new three-dot menu action to mark or unmark a vault item as favorite.
+Favorite state is persisted by re-encrypting and saving the item in Firestore.
+Added a visual favorite badge on favorite cards.
+Updated the password strength UI so the input bottom border reflects strength with:
+    Weak: red
+    Normal: yellow
+    Medium: blue
+    Strong: green
+.border-b-red-500
+.border-b-yellow-400
+.border-b-blue-500
+.border-b-green-500
+
+✅ Sort Dropdown Menu with three options:
+    Default - Original order
+    Favorite First - Favorites (with ⭐ badge) appear at the top
+    Strongest First - Items sorted by password strength (strongest to weakest)
+✅ Password Strength Scoring for sorting:
+    Calculated based on length (8+, 12+), mixed case, digits, and symbols
+    Scores items on a 0-5 scale for consistent strength-based sorting
+✅ Responsive UI:
+    Search and sort controls display side-by-side on desktop
+    Stack vertically on mobile
+    ChevronDown icon rotates when menu is open
+    Active selection highlighted in emerald green
+✅ Dropdown Styling:
+    Positioned below the sort button
+    Clean z-indexed menu that closes when option is selected
+    Hover states for all menu items
+
+    Default - Shows all vault items without filtering
+    Favorite - Sorts items by favorite status (favorites first)
+    Strongest - Sorts items from strongest to weakest passwords
+    Strong - Shows only strong passwords (score ≥ 4)
+    Medium - Shows only medium strength passwords (score = 3)
+    Normal - Shows only normal strength passwords (score = 2)
+    Weak - Shows only weak passwords (score ≤ 1)
+
+✅ localStorage Cache - Stores favicon URLs with 7-day expiration
+    Cache key: favicon_cache
+    Stores: { iconUrl: string | null, timestamp: number }
+✅ Cache Functions:
+    getCacheMap() - Retrieves the entire cache from localStorage
+    setCacheMap() - Saves cache to localStorage
+    getCachedFaviconUrl() - Gets cached favicon for a normalized URL, checks expiry
+    setCachedFaviconUrl() - Stores favicon URL with timestamp
+✅ Smart Fetch Logic:
+    When component loads with a URL, checks cache first
+    If cached and not expired → uses it immediately (no API call)
+    If not cached → fetches from API and caches the result
+    Only re-fetches when the actual URL changes (not on filter changes)
+
+Eliminates redundant API calls when filtering vault items
+Reduces bandwidth significantly
+Faster page loads for frequently viewed items
+7-day cache expiration ensures fresh data periodically
+Safe checks for window and localStorage availability
+
+Added order state with two controls in the dropdown: Ascending and Descending.
+    Ascending = A-Z
+    Descending = Z-A
+Kept your existing filters: Default, Favorite, Strongest, Strong, Medium, Normal, Weak.
+Updated sorting logic so each selected filter’s result is ordered by siteName using:
+    Ascending: A-Z
+    Descending: Z-A
+Updated the active dropdown label to show the order context for each mode, e.g. Favorite (A-Z) or Weak (Z-A).
+Updated toggle labels to Asc (A-Z) and Desc (Z-A) for clarity.
+
+Total password count card
+Security Health score card:
+    Computed as average password strength across vault entries
+    Formula normalized to percentage from strength score out of 5
+Needs Attention card:
+    Shows count of weak passwords
+Strength distribution graph:
+    Strongest, Medium, Normal, Weak
+    Each row has count + percentage + progress bar
+Recent passwords added panel:
+    Shows latest 5 entries using most recent update time
+    Displays site/app, username, and timestamp
+
+Added optional updatedAt timestamp to vault item type so recents can be tracked reliably
+During decryption/snapshot load, dashboard now reads Firestore updatedAt and stores it on each item
+On save and favorite toggle, updatedAt is refreshed in encrypted payload as fallback metadata
+
+Added dashboard metrics: total passwords, security health score, weak-password count.
+Added strength distribution graph for strongest, medium, normal, and weak passwords.
+Added recent passwords panel (latest 5) with timestamp-based ordering.
+Extended vault typing and data handling with optional updatedAt metadata.
+Wired Firestore snapshot parsing and save/update flows to preserve/use timestamps.
+
+If there are no passwords, the doughnut shows a neutral ring.
+Doughnut and bar chart always use the same source values, so they remain synchronized.
+
+Added a doughnut-style password strength distribution chart next to the existing bar distribution on the dashboard, using the same strongest/medium/normal/weak data so both visuals stay synchronized. Also included a center total count, legend, empty-state fallback ring, and validated the change with a successful production build.
+Implemented a doughnut strength distribution visualization beside the existing bar chart in the dashboard analytics section, powered by shared strength statistics for consistency. Included legend and total-in-center display, handled zero-data state gracefully, and verified everything compiles with npm run build.
+
+The Recent Passwords Added cards now support exactly what you asked:
+    Favicon shown for each recent item
+    Password display area added
+    Show/Hide toggle per recent item
+    Copy password button per recent item (with success check state)
+
+the search-focused UX update by animating dashboard analytics sections to collapse/hide whenever search text is present, keeping the search field and vault results prominently at the top with smoother transitions and less visual lag. Verified the change with a successful production build.
+Implemented smooth search mode on dashboard: analytics/summary sections now animate out and collapse when a search query is entered, so search and vault results stay top-focused for a premium, low-jank experience. Confirmed no regressions with a successful npm run build.
+
+Initial load with empty search: analytics/dashboard content is visible.
+As soon as search has text: analytics hides smoothly.
+Clearing search: analytics returns
+
+In Edit Password, users now see both timestamps directly below the Secure Notes area:
+    Created
+    Last Modified
+
+Added dark/light theme support across the project with a persisted ThemeToggle, early theme initialization in the root layout, and light-mode CSS overrides for the existing dark UI. Exposed the toggle on auth, dashboard, and settings pages, and verified the app builds successfully.
+Expanded sidebar/drawer: theme control now shows icon + text on the left and toggle switch on the right.
+Collapsed sidebar: theme control now shows only an icon button.
+
+Export options in Settings:
+    Export CSV
+CSV import flow in Settings:
+    User uploads CSV file
+    App parses headers/rows
+    App auto-suggests mapping intelligently using header heuristics and aliases (for site, username, password, URL, notes, favorite)
+    User can adjust mapping manually via dropdowns
+    Required fields are enforced: site/app, username, password
+    Preview table shows sample rows before import
+    Import writes entries into vault using the same encryption pattern as the rest of the app
+Preview table now uses mapped fields instead of raw CSV columns.
+If a field is set to Ignore, that column is removed from preview instantly.
+If all fields are ignored, a clear message is shown.
+
+Added a show/hide dashboard icon button on the left side of the Add Password button in page.tsx.
+The icon toggles between show and hide states.
+Toggling now smoothly animates dashboard containers in/out (analytics section + vault cards section), not an abrupt hide.
+
+Kept main vault list/grid always visible and scrollable from initial load.
+Updated show/hide icon behavior so it only toggles:
+    3 dashboard stat cards
+    Password Strength Distribution container
+    Recent Passwords Added container
+Preserved smooth animation for hide/show transitions.
+
+Sidebar user area now includes a profile avatar next to the email (desktop + mobile drawer).
+If the authenticated user has photoURL (like Google sign-in), that image is shown automatically.
+If no photo exists, it falls back to the user initial.
+
+Firebase Google popup auth integration using GoogleAuthProvider + signInWithPopup.
+A Continue with Google button shown under the existing email/password submit action.
+A divider (or) between normal auth and Google auth.
+Validation that master password is entered before Google auth.
+On successful Google auth, user state includes photoURL and vault key is derived from:
+    entered master password
+    Google account email
+
+Uses Google profile photo if available.
+Falls back to initial badge if no photo.
+Shows the user email on hover via tooltip.
+
+Forgot Password:
+    added Forgot password? action on login mode.
+    integrated Firebase sendPasswordResetEmail.
+    user enters email and gets reset link in inbox.
+    added success/error notice messages in UI.
+
+Split passwords into two fields:
+    Account Password: used only for Firebase sign in/sign up
+    Vault Master Password: used only to derive encryption key
+Updated both login methods:
+    Email/password login uses account password for auth, master password for vault key
+    Continue with Google uses master password for vault key
+    Added help text telling users to keep the same vault master password even if they reset account password.
+Result:
+    Same email account can now access the same vault data across Google and email login, as long as the same Vault Master Password is used.
+
+If a user forgets their master password, existing vault data cannot be decrypted by design; recovery requires either an existing unlocked session/device or a previously exported decrypted backup. I’ll share the practical recovery paths and the safest features we can add to reduce this risk going forward.
+If user forgets the master password, old vault entries are not recoverable in a true zero-knowledge setup.
+Why:
+    Vault data is encrypted with a key derived from that master password.
+    Firebase/Auth password reset only changes login auth, not encrypted vault data.
+    Without the same master password (or equivalent recovery key), decryption is mathematically blocked.
+What user can still do:
+    Use an already unlocked session/device and rotate to a new master password.
+    Restore from a previously exported decrypted backup (CSV/JSON).
+    If neither exists, reset vault data and start fresh.
+
+Master password is not stored in Firebase or database as plain text in this app. It is handled like this:
+Storage model
+    The app derives an encryption key from:
+        Vault Master Password (what user types)
+        User email (as salt)
+    It uses PBKDF2 (SHA-256, 100000 iterations) to derive that key.
+    The derived key is kept only in app memory (session state), not permanently saved as a retrievable master password.
+How correctness is checked
+    There is no server-side “master password equals X” check.
+    Correctness is verified by decryption success:
+        App tries decrypting vault items with the derived key.
+        If decrypted text is valid JSON payload, key/password is treated as correct.
+        If decryption fails or output is invalid, it is treated as incorrect.
+During Change Master Password
+    App first derives key from the entered current master password and email.
+    It compares that derived key with the active in-memory key for this session.
+    If it matches, app decrypts all entries with old key and re-encrypts with key from new master password.
+Important consequence
+    If user forgets master password, existing encrypted vault data cannot be decrypted unless they have:
+        an unlocked session/device, or
+        a previously exported decrypted backup.
+
+
+Sign-up/onboarding warning block:
+    “Add a recovery key at onboarding (shown once, user stores offline).”
+    Clear note that forgetting master password without recovery/backup means old vault data can’t be decrypted.
+Login forgot-password warning block:
+    “Forgot password resets account login only.”
+    “It does not recover vault encryption key (master password).”
+
+Users are now told to store the master password offline in a safe place.
+Warnings clearly state that master password is required to:
+    decrypt the vault
+    change/re-encrypt vault data later
+Forgot-password warning now also emphasizes that reset only affects account login, not vault decryption key recovery.
+
+App metadata title/branding changed from Vaulto to meropasswordmanager.
+Apple web app title updated to meropasswordmanager.
+SEO before deployment
+    Added stronger metadata in layout:
+        title template
+        improved description
+        keywords
+        authors/creator/publisher
+        canonical
+        robots
+        Open Graph
+        Twitter card metadata
+    Added metadataBase using NEXT_PUBLIC_SITE_URL fallback to localhost.
+Manifest alignment
+    Kept main manifest at /manifest.json for deployment consistency.
+    Updated manifest branding text to meropasswordmanager.
+    Fixed favicon manifest icon paths to /favicon/... so they match your public/favicon directory.
+
+the manual Vercel dashboard flow and give you the exact steps to import the repo, add the required environment variables, and deploy from the web UI.Use the Vercel web dashboard like this:
+    Go to Vercel and sign in.
+    Click New Project.
+    Import the GitHub repository you pushed.
+    Vercel should auto-detect Next.js. Keep the default settings unless you changed the root folder.
+    Add the environment variables from your local .env.local into the Vercel Project Settings. Do not upload the .env.local file itself.
+    Click Deploy.
+After deployment:
+    Check the preview URL first.
+    If everything looks good, set the production domain if needed.
+    Future pushes to main will redeploy automatically.
+
+Here's what the delete account flow does step by step:
+The modal requires two things before the button activates:
+    Vault Master Password field — verified locally by deriving the key and comparing against the in-memory masterKey
+    Typing DELETE exactly — prevents accidental clicks
+When confirmed, it executes in order:
+    Re-authenticate with Firebase (reauthenticateWithCredential) — Firebase requires this for destructive operations if the session is old
+    Delete all vault documents from Firestore in batches of 499 (Firestore limit is 500 ops/batch)
+    Delete the user document at users/{uid} if it exists
+    Delete the Firebase Auth account itself (deleteUser)
+    Clear Zustand store and redirect to /auth
+Error handling covers:
+    Wrong password → "Incorrect password" message
+    Too many attempts → rate limit message
+    Any other Firebase error → generic message with console log
+
+Passkey login — use device biometrics (Face ID, fingerprint, Windows Hello) to log in without typing account password + master password
+Passkey-based master password change — if passkey is enabled, use it to authorize changing the master password
+Store master password in Firebase — so it can be emailed via Resend if forgotten
+Passkey stores the master password locally — when you register a passkey, the master password gets encrypted using the WebAuthn credential and stored in localStorage (device-bound). This is exactly how Google Photos / 1Password passkeys work — the secret stays on-device.
+"Forgot master password" via email — instead of storing the raw master password, we store an encrypted copy of the master password in Firestore, encrypted with a key derived from the user's Firebase auth token. The Resend email sends a recovery link that lets the user decrypt it after re-authenticating. This is much safer than plaintext storage.
+
+"Forgot master password?" link added below the Vault Master Password field (login screen only)
+Shows a spinner while the request is in flight
+On success: green notice with "Recovery email sent to..."
+On failure: red error with the specific reason
+handleForgotMasterPassword — calls the new API route with email + account password
+Security model: The account password is required to trigger recovery (it's the decryption key for the blob). A stranger who only knows your email cannot get your master password emailed to them — they'd need your account password too, at which point they could just log in anyway.
+
+The forgot master password flow on the login screen works from any device, including new ones. It doesn't need a passkey or prior login on that device. The flow is:
+    User enters email + account password on the login screen
+    Clicks "Forgot master password?"
+    The API route verifies those credentials against Firebase Auth (server-side)
+    Reads the encrypted recovery blob from Firestore (stored in the cloud, not on-device)
+    Decrypts it and emails the master password
+The only requirement is that the user logged in at least once after the feature was added — that's when the recovery blob gets written to Firestore. After that, it works from any device, any browser, anywhere.
+The passkey is the only device-bound thing — passkeys live in localStorage and only work on the device they were registered on. But forgot master password via email has nothing to do with passkeys.
+The only edge case where forgot master password won't work is if the user never logged in after the feature was added (no recovery blob in Firestore yet). In that case they get the "No recovery data found" message, which tells them to log in once first.
+
 use firebase and supabase for database and authentication
 allow user to login from google/manually email
 

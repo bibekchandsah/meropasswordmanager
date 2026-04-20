@@ -15,7 +15,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 export default function Dashboard() {
   const router = useRouter();
-  const { user, masterKey, setMasterKey, logout } = useStore();
+  const { user, masterKey, setMasterKey, setMasterPassword, logout } = useStore();
   const [items, setItems] = useState<VaultItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -89,6 +89,7 @@ export default function Dashboard() {
     try {
       const derivedKey = deriveKey(unlockPassword, user.email);
       setMasterKey(derivedKey);
+      setMasterPassword(unlockPassword);
       setUnlockPassword('');
       setLoading(true);
     } catch {

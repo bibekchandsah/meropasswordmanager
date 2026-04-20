@@ -37,13 +37,40 @@
 // ─── Storage key helpers ────────────────────────────────────────────────────
 
 const storageKey = (uid: string) => `passkey_data_${uid}`;
+const devicePasskeyIndexKey = 'passkey_device_accounts';
 
 interface PasskeyStoredData {
-  credentialId: string;          // base64url
-  encryptedMasterPassword: string; // base64
-  iv: string;                    // base64 – IV used for AES-GCM
-  wrappingKey: string;           // base64 – raw 256-bit key (stored plaintext;
-                                 // security comes from WebAuthn gating the UI)
+  credentialId: string;
+  encryptedMasterPassword: string;
+  encryptedAccountPassword: string; // account password encrypted with same wrapping key
+  ivMaster: string;                 // IV for master password
+  ivAccount: string;                // IV for account password
+  /** @deprecated use ivMaster — kept for backwards compat with old entries */
+  iv?: string;
+  wrappingKey: string;
+  uid: string;
+  email: string;
+  refreshToken: string;
+}
+
+// Index of all UIDs that have a passkey on this device (for discovery)
+function getDevicePasskeyAccounts(): string[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    return JSON.parse(localStorage.getItem(devicePasskeyIndexKey) || '[]');
+  } catch { return []; }
+}
+
+function addDevicePasskeyAccount(uid: string): void {
+  const existing = getDevicePasskeyAccounts();
+  if (!existing.includes(uid)) {
+    localStorage.setItem(devicePasskeyIndexKey, JSON.stringify([...existing, uid]));
+  }
+}
+
+function removeDevicePasskeyAccount(uid: string): void {
+  const existing = getDevicePasskeyAccounts();
+  localStorage.setItem(devicePasskeyIndexKey, JSON.stringify(existing.filter(u => u !== uid)));
 }
 
 // ─── Base64 helpers ──────────────────────────────────────────────────────────
@@ -129,13 +156,67 @@ export function isPasskeyRegistered(uid: string): boolean {
 }
 
 /**
+ * Returns the stored uid+email for the first passkey account on this device,
+ * or null if none registered. Used for the one-tap passkey login button.
+ */
+export function getDevicePasskeyAccount(): { uid: string; email: string } | null {
+  if (typeof window === 'undefined') return null;
+  const uids = getDevicePasskeyAccounts();
+  for (const uid of uids) {
+    const raw = localStorage.getItem(storageKey(uid));
+    if (raw) {
+      try {
+        const data: PasskeyStoredData = JSON.parse(raw);
+        if (data.uid && data.email) return { uid: data.uid, email: data.email };
+      } catch { /* skip */ }
+    }
+  }
+  return null;
+}
+
+/**
+ * Use the stored Firebase refresh token to silently get a fresh ID token.
+ * Returns the new idToken, or throws on failure.
+ */
+export async function refreshFirebaseToken(uid: string): Promise<string> {
+  const raw = localStorage.getItem(storageKey(uid));
+  if (!raw) throw new Error('No passkey data found.');
+  const data: PasskeyStoredData = JSON.parse(raw);
+
+  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+  if (!apiKey) throw new Error('Firebase API key not configured.');
+
+  const res = await fetch(
+    `https://securetoken.googleapis.com/v1/token?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(data.refreshToken)}`,
+    }
+  );
+
+  if (!res.ok) {
+    throw new Error('Firebase token refresh failed. Please sign in normally.');
+  }
+
+  const json = await res.json();
+  // Update stored refresh token with the new one
+  const updated: PasskeyStoredData = { ...data, refreshToken: json.refresh_token };
+  localStorage.setItem(storageKey(uid), JSON.stringify(updated));
+
+  return json.id_token as string;
+}
+
+/**
  * Register a new passkey for the user and encrypt their master password with it.
  * Throws on failure.
  */
 export async function registerPasskey(
   uid: string,
   email: string,
-  masterPassword: string
+  masterPassword: string,
+  accountPassword: string,
+  refreshToken: string
 ): Promise<void> {
   // Random user handle (not the UID – WebAuthn user.id must be random bytes)
   const userHandle = crypto.getRandomValues(new Uint8Array(32));
@@ -172,25 +253,32 @@ export async function registerPasskey(
 
   const credentialId = bufferToBase64url(credential.rawId);
 
-  // Generate a wrapping key and encrypt the master password with it
+  // Generate a wrapping key and encrypt both passwords with it
   const { key: wrappingKey, rawBase64: wrappingKeyRaw } = await generateWrappingKey();
-  const { ciphertext, iv } = await aesGcmEncrypt(wrappingKey, masterPassword);
+  const { ciphertext: masterCiphertext, iv: masterIv } = await aesGcmEncrypt(wrappingKey, masterPassword);
+  const { ciphertext: accountCiphertext, iv: accountIv } = await aesGcmEncrypt(wrappingKey, accountPassword);
 
   const data: PasskeyStoredData = {
     credentialId,
-    encryptedMasterPassword: ciphertext,
-    iv,
+    encryptedMasterPassword: masterCiphertext,
+    encryptedAccountPassword: accountCiphertext,
+    ivMaster: masterIv,
+    ivAccount: accountIv,
     wrappingKey: wrappingKeyRaw,
+    uid,
+    email,
+    refreshToken,
   };
 
   localStorage.setItem(storageKey(uid), JSON.stringify(data));
+  addDevicePasskeyAccount(uid);
 }
 
 /**
- * Authenticate with the registered passkey and return the decrypted master password.
+ * Authenticate with the registered passkey and return the decrypted passwords.
  * Throws on failure or cancellation.
  */
-export async function authenticateWithPasskey(uid: string): Promise<string> {
+export async function authenticateWithPasskey(uid: string): Promise<{ masterPassword: string; accountPassword: string; email: string }> {
   const raw = localStorage.getItem(storageKey(uid));
   if (!raw) throw new Error('No passkey registered on this device.');
 
@@ -214,10 +302,21 @@ export async function authenticateWithPasskey(uid: string): Promise<string> {
 
   if (!assertion) throw new Error('Passkey authentication was cancelled.');
 
-  // Assertion succeeded → device verified the user; decrypt the master password
+  // Assertion succeeded → device verified the user; decrypt both passwords
   const wrappingKey = await importWrappingKey(data.wrappingKey);
-  const masterPassword = await aesGcmDecrypt(wrappingKey, data.encryptedMasterPassword, data.iv);
-  return masterPassword;
+
+  // Support old entries that used a single `iv` field
+  const masterIv = data.ivMaster ?? data.iv ?? '';
+  const masterPassword = await aesGcmDecrypt(wrappingKey, data.encryptedMasterPassword, masterIv);
+
+  // Old entries won't have encryptedAccountPassword — return empty string as fallback
+  // (caller will need to fall back to asking for account password)
+  let accountPassword = '';
+  if (data.encryptedAccountPassword && data.ivAccount) {
+    accountPassword = await aesGcmDecrypt(wrappingKey, data.encryptedAccountPassword, data.ivAccount);
+  }
+
+  return { masterPassword, accountPassword, email: data.email };
 }
 
 /**
@@ -229,7 +328,7 @@ export async function updatePasskeyMasterPassword(
   newMasterPassword: string
 ): Promise<void> {
   const raw = localStorage.getItem(storageKey(uid));
-  if (!raw) return; // no passkey registered, nothing to update
+  if (!raw) return;
 
   const data: PasskeyStoredData = JSON.parse(raw);
   const wrappingKey = await importWrappingKey(data.wrappingKey);
@@ -238,7 +337,7 @@ export async function updatePasskeyMasterPassword(
   const updated: PasskeyStoredData = {
     ...data,
     encryptedMasterPassword: ciphertext,
-    iv,
+    ivMaster: iv,
   };
   localStorage.setItem(storageKey(uid), JSON.stringify(updated));
 }
@@ -248,4 +347,5 @@ export async function updatePasskeyMasterPassword(
  */
 export function removePasskey(uid: string): void {
   localStorage.removeItem(storageKey(uid));
+  removeDevicePasskeyAccount(uid);
 }

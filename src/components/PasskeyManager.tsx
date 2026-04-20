@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useStore } from '@/store/useStore';
+import { auth } from '@/lib/firebase';
 import {
   isPasskeySupported,
   isPasskeyRegistered,
   registerPasskey,
   removePasskey,
 } from '@/lib/passkey';
-import { Fingerprint, Loader2, Trash2, Mail, RefreshCcw, ShieldCheck, ShieldOff } from 'lucide-react';
+import { Fingerprint, Loader2, Trash2, Mail, RefreshCcw, ShieldCheck, ShieldOff, KeyRound } from 'lucide-react';
 
 export default function PasskeyManager() {
   const { user, masterPassword, masterKey } = useStore();
@@ -18,6 +19,9 @@ export default function PasskeyManager() {
   const [registerLoading, setRegisterLoading] = useState(false);
   const [registerError, setRegisterError] = useState<string | null>(null);
   const [registerSuccess, setRegisterSuccess] = useState<string | null>(null);
+  // Account password needed once at registration so passkey login can re-auth Firebase
+  const [accountPasswordInput, setAccountPasswordInput] = useState('');
+  const [showAccountPasswordField, setShowAccountPasswordField] = useState(false);
 
   // Email recovery state
   const [emailLoading, setEmailLoading] = useState(false);
@@ -38,9 +42,23 @@ export default function PasskeyManager() {
     if (!user) return;
 
     if (!masterPassword) {
-      setRegisterError(
-        'Your master password is not in memory. Please lock and unlock your vault first, then try again.'
-      );
+      setRegisterError('Your master password is not in memory. Lock and unlock your vault first, then try again.');
+      return;
+    }
+
+    // For Google-auth users there is no account password — skip the field.
+    // For email/password users we need it to silently re-auth Firebase on passkey login.
+    const isGoogleUser = auth.currentUser?.providerData?.some(p => p.providerId === 'google.com');
+
+    if (!isGoogleUser && !showAccountPasswordField) {
+      // Show the account password field first
+      setShowAccountPasswordField(true);
+      setRegisterError(null);
+      return;
+    }
+
+    if (!isGoogleUser && !accountPasswordInput.trim()) {
+      setRegisterError('Enter your account password to continue.');
       return;
     }
 
@@ -49,9 +67,13 @@ export default function PasskeyManager() {
     setRegisterSuccess(null);
 
     try {
-      await registerPasskey(user.uid, user.email, masterPassword);
+      const refreshToken = auth.currentUser?.refreshToken ?? '';
+      const accountPwd = isGoogleUser ? '' : accountPasswordInput;
+      await registerPasskey(user.uid, user.email, masterPassword, accountPwd, refreshToken);
       setRegistered(true);
-      setRegisterSuccess('Passkey registered! You can now sign in with your device biometrics.');
+      setRegisterSuccess('Passkey registered! You can now sign in with your device biometrics — no passwords needed.');
+      setShowAccountPasswordField(false);
+      setAccountPasswordInput('');
     } catch (err: unknown) {
       const msg = (err as Error).message || '';
       if (msg.toLowerCase().includes('cancel') || msg.toLowerCase().includes('abort') || msg.toLowerCase().includes('not allowed')) {
@@ -71,13 +93,13 @@ export default function PasskeyManager() {
     setRegistered(false);
     setRegisterSuccess(null);
     setRegisterError(null);
+    setShowAccountPasswordField(false);
+    setAccountPasswordInput('');
   };
 
   const handleSendEmail = async () => {
     if (!user || !masterPassword) {
-      setEmailError(
-        'Your master password is not in memory. Lock and unlock your vault first, then try again.'
-      );
+      setEmailError('Your master password is not in memory. Lock and unlock your vault first, then try again.');
       return;
     }
 
@@ -143,8 +165,8 @@ export default function PasskeyManager() {
             </div>
             <p className="text-sm text-zinc-400 max-w-xl">
               {registered
-                ? 'Passkey is active on this device. Sign in with Face ID, fingerprint, or Windows Hello — no master password needed.'
-                : 'Register your device biometrics (Face ID, fingerprint, Windows Hello) to sign in without typing your master password.'}
+                ? 'Passkey is active on this device. Sign in with Face ID, fingerprint, or Windows Hello — no passwords needed.'
+                : 'Register your device biometrics (Face ID, fingerprint, Windows Hello) to sign in without typing any password.'}
             </p>
           </div>
         </div>
@@ -155,24 +177,43 @@ export default function PasskeyManager() {
           </div>
         )}
 
+        {/* Account password field — shown once before registration for email/password users */}
+        {showAccountPasswordField && !registered && (
+          <div className="space-y-2">
+            <p className="text-xs text-zinc-400">
+              Enter your account password once so the passkey can sign you in fully automatically next time.
+            </p>
+            <div className="relative">
+              <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+              <input
+                type="password"
+                value={accountPasswordInput}
+                onChange={(e) => setAccountPasswordInput(e.target.value)}
+                placeholder="Account password"
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-2 pl-9 pr-3 text-sm text-slate-200 outline-none focus:ring-2 focus:ring-violet-500"
+              />
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-wrap gap-2">
           {!registered ? (
             <button
               onClick={handleRegister}
               disabled={registerLoading || !isVaultUnlocked}
-              className="bg-violet-600 hover:bg-violet-500 text-white font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+              className="bg-violet-600 hover:bg-violet-500 text-white font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
             >
               {registerLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
                 <Fingerprint className="w-4 h-4" />
               )}
-              {registerLoading ? 'Registering...' : 'Set Up Passkey'}
+              {registerLoading ? 'Registering...' : showAccountPasswordField ? 'Continue' : 'Set Up Passkey'}
             </button>
           ) : (
             <button
               onClick={handleRemove}
-              className="bg-red-500/10 hover:bg-red-500 hover:text-white border border-red-500/50 text-red-400 font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all whitespace-nowrap"
+              className="bg-red-500/10 hover:bg-red-500 hover:text-white border border-red-500/50 text-red-400 font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap"
             >
               <Trash2 className="w-4 h-4" />
               Remove Passkey
@@ -213,7 +254,7 @@ export default function PasskeyManager() {
         <button
           onClick={handleSendEmail}
           disabled={emailLoading || !isVaultUnlocked}
-          className="bg-sky-600 hover:bg-sky-500 text-white font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+          className="bg-sky-600 hover:bg-sky-500 text-white font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
         >
           {emailLoading ? (
             <RefreshCcw className="w-4 h-4 animate-spin" />

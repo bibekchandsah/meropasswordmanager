@@ -6,8 +6,9 @@ import { collection, query, onSnapshot, doc, setDoc, deleteDoc, serverTimestamp 
 import { db } from '@/lib/firebase';
 import { useStore } from '@/store/useStore';
 import { encryptData, decryptData, deriveKey } from '@/lib/crypto';
+import { isPasskeySupported, isPasskeyRegistered, authenticateWithPasskey } from '@/lib/passkey';
 import { VaultItem } from '@/types/vault';
-import { Plus, Search, Loader2, Lock, KeyRound, ChevronDown, Eye, EyeOff, Copy, Check } from 'lucide-react';
+import { Plus, Search, Loader2, Lock, KeyRound, ChevronDown, Eye, EyeOff, Copy, Check, Fingerprint } from 'lucide-react';
 import VaultItemCard from '@/components/VaultItemCard';
 import AddEditItemModal from '@/components/AddEditItemModal';
 import Favicon from '@/components/Favicon';
@@ -25,6 +26,7 @@ export default function Dashboard() {
   const [unlockPassword, setUnlockPassword] = useState('');
   const [unlockError, setUnlockError] = useState('');
   const [unlockLoading, setUnlockLoading] = useState(false);
+  const [passkeyUnlockLoading, setPasskeyUnlockLoading] = useState(false);
   const [recentVisiblePasswords, setRecentVisiblePasswords] = useState<Record<string, boolean>>({});
   const [recentCopiedPasswords, setRecentCopiedPasswords] = useState<Record<string, boolean>>({});
   const [showDashboardContainers, setShowDashboardContainers] = useState(true);
@@ -86,6 +88,10 @@ export default function Dashboard() {
     setUnlockLoading(true);
     setUnlockError('');
 
+    // Yield to the browser first so the loading state renders before
+    // PBKDF2 (100k iterations) blocks the main thread for ~3-4 seconds.
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
     try {
       const derivedKey = deriveKey(unlockPassword, user.email);
       setMasterKey(derivedKey);
@@ -94,8 +100,36 @@ export default function Dashboard() {
       setLoading(true);
     } catch {
       setUnlockError('Unable to unlock vault. Check your master password.');
-    } finally {
       setUnlockLoading(false);
+    }
+  };
+
+  const handlePasskeyUnlock = async () => {
+    if (!user) return;
+
+    if (!isPasskeyRegistered(user.uid)) {
+      setUnlockError('No passkey found on this device. Enter your master password instead.');
+      return;
+    }
+
+    setPasskeyUnlockLoading(true);
+    setUnlockError('');
+
+    try {
+      const { masterPassword: decryptedMasterPassword } = await authenticateWithPasskey(user.uid);
+      const derivedKey = deriveKey(decryptedMasterPassword, user.email);
+      setMasterKey(derivedKey);
+      setMasterPassword(decryptedMasterPassword);
+      setLoading(true);
+    } catch (err: unknown) {
+      const msg = (err as Error).message || '';
+      if (msg.toLowerCase().includes('cancel') || msg.toLowerCase().includes('abort')) {
+        setUnlockError('Passkey authentication was cancelled.');
+      } else {
+        setUnlockError('Passkey authentication failed. Try entering your master password.');
+      }
+    } finally {
+      setPasskeyUnlockLoading(false);
     }
   };
 
@@ -105,6 +139,9 @@ export default function Dashboard() {
   }
 
   if (!masterKey) {
+    const anyUnlockLoading = unlockLoading || passkeyUnlockLoading;
+    const passkeyAvailable = isPasskeySupported() && isPasskeyRegistered(user.uid);
+
     return (
       <div className="min-h-[calc(100vh-2rem)] flex items-center justify-center">
         <motion.div
@@ -138,7 +175,8 @@ export default function Dashboard() {
                   value={unlockPassword}
                   onChange={(e) => setUnlockPassword(e.target.value)}
                   required
-                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950 py-3 pl-10 pr-4 text-sm text-slate-200 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30"
+                  disabled={anyUnlockLoading}
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950 py-3 pl-10 pr-4 text-sm text-slate-200 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30 disabled:opacity-50"
                   placeholder="Enter master password"
                 />
               </div>
@@ -146,12 +184,39 @@ export default function Dashboard() {
 
             <button
               type="submit"
-              disabled={unlockLoading}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-3 font-semibold text-zinc-950 transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={anyUnlockLoading}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-3 font-semibold text-zinc-950 transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
             >
               {unlockLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Lock className="h-5 w-5" />}
-              Unlock Vault
+              {unlockLoading ? 'Unlocking...' : 'Unlock Vault'}
             </button>
+
+            {passkeyAvailable ? (
+              <>
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-zinc-800" />
+                  </div>
+                  <div className="relative flex justify-center">
+                    <span className="bg-zinc-900 px-3 text-xs text-zinc-500">or</span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handlePasskeyUnlock}
+                  disabled={anyUnlockLoading}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-3 font-semibold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
+                >
+                  {passkeyUnlockLoading ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <Fingerprint className="h-5 w-5" />
+                  )}
+                  {passkeyUnlockLoading ? 'Verifying...' : 'Unlock with Passkey'}
+                </button>
+              </>
+            ) : null}
 
             <button
               type="button"
@@ -159,7 +224,8 @@ export default function Dashboard() {
                 logout();
                 router.push('/auth');
               }}
-              className="w-full text-sm text-zinc-400 transition hover:text-zinc-200"
+              disabled={anyUnlockLoading}
+              className="w-full text-sm text-zinc-400 transition hover:text-zinc-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Use a different account
             </button>

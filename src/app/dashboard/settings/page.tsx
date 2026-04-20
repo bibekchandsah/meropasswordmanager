@@ -448,7 +448,7 @@ export default function SettingsPage() {
                 <button
                   onClick={handleInstallApp}
                   disabled={isInstallFlowRunning || !canInstall}
-                  className="bg-amber-500 hover:bg-amber-400 text-zinc-950 font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed min-w-[150px] justify-center whitespace-nowrap"
+                  className="bg-amber-500 hover:bg-amber-400 text-zinc-950 font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer min-w-[150px] justify-center whitespace-nowrap"
                 >
                   {isInstallFlowRunning ? <RefreshCcw className="w-4 h-4 animate-spin" /> : <Smartphone className="w-4 h-4" />}
                   {isInstallFlowRunning ? 'Opening...' : 'Install App'}
@@ -473,7 +473,7 @@ export default function SettingsPage() {
               <button
                 onClick={handleExportCsv}
                 disabled={loadingCsvExport}
-                className="bg-cyan-600 hover:bg-cyan-500 text-white font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all disabled:opacity-50 min-w-[124px] justify-center whitespace-nowrap"
+                className="bg-cyan-600 hover:bg-cyan-500 text-white font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all disabled:opacity-50 cursor-pointer min-w-[124px] justify-center whitespace-nowrap"
               >
                 {loadingCsvExport ? <RefreshCcw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                 {loadingCsvExport ? 'Exporting...' : 'Export CSV'}
@@ -642,7 +642,7 @@ export default function SettingsPage() {
                 <button
                   type="submit"
                   disabled={loadingMasterPasswordChange}
-                  className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
                 >
                   {loadingMasterPasswordChange ? <RefreshCcw className="w-4 h-4 animate-spin" /> : null}
                   {loadingMasterPasswordChange ? 'Re-encrypting...' : 'Change Master Password'}
@@ -677,7 +677,7 @@ export default function SettingsPage() {
                 setDeleteConfirmText('');
                 setDeleteError(null);
               }}
-              className="bg-red-500/10 hover:bg-red-500 hover:text-white border border-red-500/50 text-red-500 font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all whitespace-nowrap"
+              className="bg-red-500/10 hover:bg-red-500 hover:text-white border border-red-500/50 text-red-500 font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap"
             >
               <Trash2 className="w-4 h-4" />
               Delete Account

@@ -37,7 +37,7 @@ export default function ThemeToggle({ className = '', iconOnly = false }: { clas
       <button
         type="button"
         onClick={toggleTheme}
-        className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900 text-slate-200 transition hover:bg-zinc-800 hover:text-white ${className}`}
+        className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900 text-slate-200 transition hover:bg-zinc-800 hover:text-white cursor-pointer ${className}`}
         aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
         title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
         aria-pressed={theme === 'light'}
@@ -51,7 +51,7 @@ export default function ThemeToggle({ className = '', iconOnly = false }: { clas
     <button
       type="button"
       onClick={toggleTheme}
-      className={`inline-flex items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm font-medium text-slate-200 transition hover:bg-zinc-800 hover:text-white ${className}`}
+      className={`inline-flex items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm font-medium text-slate-200 transition hover:bg-zinc-800 hover:text-white cursor-pointer ${className}`}
       aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
       title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
       aria-pressed={theme === 'light'}

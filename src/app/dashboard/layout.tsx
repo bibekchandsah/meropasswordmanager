@@ -9,12 +9,14 @@ import { auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
 import { Settings, LogOut, ShieldAlert, LayoutDashboard, Menu, X, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
+import { useAutoLock } from '@/hooks/useAutoLock';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { user, logout } = useStore();
   const [isClient, setIsClient] = useState(false);
+  useAutoLock();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 

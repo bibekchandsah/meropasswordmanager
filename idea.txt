@@ -417,6 +417,18 @@ The only requirement is that the user logged in at least once after the feature 
 The passkey is the only device-bound thing — passkeys live in localStorage and only work on the device they were registered on. But forgot master password via email has nothing to do with passkeys.
 The only edge case where forgot master password won't work is if the user never logged in after the feature was added (no recovery blob in Firestore yet). In that case they get the "No recovery data found" message, which tells them to log in once first.
 
+On load, checks getDevicePasskeyAccount() — if a passkey exists on this device, shows a prominent "Sign in as [email]" button at the top of the card, above the form, with "Uses your device biometrics — no password needed" subtitle
+Clicking it: triggers WebAuthn biometric → decrypts master password → exchanges refresh token for ID token → looks up user profile → sets store → navigates to dashboard. Zero typing required.
+If no device passkey exists, a smaller passkey button still appears inside the form as before
+
+registerPasskey() now takes accountPassword as a 4th argument and encrypts it with the same AES-GCM wrapping key (gated behind the biometric, same security model)
+authenticateWithPasskey() now returns { masterPassword, accountPassword, email } instead of just a string
+handlePasskeyLogin in auth page now calls signInWithEmailAndPassword(auth, email, accountPassword) with the decrypted account password — this establishes a real Firebase SDK session, so AuthProvider sees a valid user and doesn't redirect
+PasskeyManager shows an account password input field the first time you click "Set Up Passkey" (one-time, never shown again after registration)
+Google users skip the account password field entirely (their session is handled via OAuth)
+Existing passkeys without encryptedAccountPassword fall back to the refresh token path gracefully
+
+
 use firebase and supabase for database and authentication
 allow user to login from google/manually email
 

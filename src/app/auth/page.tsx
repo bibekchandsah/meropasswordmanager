@@ -4,7 +4,10 @@ import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
+import { db } from '@/lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 import { deriveKey } from '@/lib/crypto';
+import { decryptTotpSecret, verifyTotpCode } from '@/lib/totp';
 import { saveRecoveryBlob } from '@/lib/recovery';
 import { useStore } from '@/store/useStore';
 import {
@@ -14,6 +17,7 @@ import {
   getDevicePasskeyAccount,
   refreshFirebaseToken,
 } from '@/lib/passkey';
+import TwoFactorChallenge from '@/components/TwoFactorChallenge';
 import { motion } from 'framer-motion';
 import { Lock, Mail, KeyRound, Loader2, Fingerprint, Home } from 'lucide-react';
 import Link from 'next/link';
@@ -32,6 +36,17 @@ export default function AuthForm() {
   const [passkeyAvailable, setPasskeyAvailable] = useState(false);
   const [forgotMasterLoading, setForgotMasterLoading] = useState(false);
   const [devicePasskeyAccount, setDevicePasskeyAccount] = useState<{ uid: string; email: string } | null>(null);
+
+  // 2FA challenge state — populated after primary auth succeeds if 2FA is enabled
+  const [pendingLogin, setPendingLogin] = useState<{
+    uid: string;
+    email: string;
+    photoURL: string | null;
+    masterKey: string;
+    masterPasswordVal: string;
+    accountPassword: string;
+    totpSecret: string | null; // null = no 2FA
+  } | null>(null);
 
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -59,6 +74,49 @@ export default function AuthForm() {
     }
   }, [searchParams]);
 
+  /**
+   * After primary auth succeeds, check if 2FA is enabled.
+   * If yes → show challenge modal (sets pendingLogin).
+   * If no → complete login immediately.
+   */
+  const finishLoginOrChallenge = async (
+    uid: string,
+    email: string,
+    photoURL: string | null,
+    derivedMasterKey: string,
+    masterPasswordVal: string,
+    accountPasswordVal: string,
+  ) => {
+    try {
+      const snap = await getDoc(doc(db, 'users', uid, '2fa', 'totp'));
+      if (snap.exists() && snap.data()?.enabled === true) {
+        // 2FA is on — decrypt the TOTP secret and show the challenge
+        const encryptedSecret = snap.data()?.encryptedSecret ?? '';
+        const totpSecret = decryptTotpSecret(encryptedSecret, derivedMasterKey);
+        setPendingLogin({ uid, email, photoURL, masterKey: derivedMasterKey, masterPasswordVal, accountPassword: accountPasswordVal, totpSecret });
+        return;
+      }
+    } catch {
+      // If we can't read 2FA status, proceed without challenge (fail open for UX)
+    }
+    // No 2FA — complete login
+    completeLogin(uid, email, photoURL, derivedMasterKey, masterPasswordVal);
+  };
+
+  const completeLogin = (
+    uid: string,
+    email: string,
+    photoURL: string | null,
+    derivedMasterKey: string,
+    masterPasswordVal: string,
+  ) => {
+    setUser({ uid, email, photoURL });
+    setMasterKey(derivedMasterKey);
+    storeMasterPassword(masterPasswordVal);
+    setPendingLogin(null);
+    router.push('/dashboard');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -82,20 +140,17 @@ export default function AuthForm() {
       const accountEmail = userCredential.user.email || email;
       const derivedKey = deriveKey(masterPassword, accountEmail);
 
-      setUser({
-        uid: userCredential.user.uid,
-        email: accountEmail,
-        photoURL: userCredential.user.photoURL,
-      });
-      setMasterKey(derivedKey);
-      storeMasterPassword(masterPassword);
-
       // Save encrypted recovery blob so "forgot master password" works later
-      saveRecoveryBlob(userCredential.user.uid, accountPassword, masterPassword).catch(() => {
-        // Non-critical — don't block login if this fails
-      });
+      saveRecoveryBlob(userCredential.user.uid, accountPassword, masterPassword).catch(() => {});
 
-      router.push('/dashboard');
+      await finishLoginOrChallenge(
+        userCredential.user.uid,
+        accountEmail,
+        userCredential.user.photoURL,
+        derivedKey,
+        masterPassword,
+        accountPassword,
+      );
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code;
       if (code === 'auth/invalid-credential') {
@@ -134,19 +189,17 @@ export default function AuthForm() {
 
       const derivedKey = deriveKey(masterPassword, accountEmail);
 
-      setUser({
-        uid: userCredential.user.uid,
-        email: accountEmail,
-        photoURL: userCredential.user.photoURL,
-      });
-      setMasterKey(derivedKey);
-      storeMasterPassword(masterPassword);
-
-      // Save encrypted recovery blob — for Google auth we use masterPassword as
-      // both the vault key source and the recovery key source (no account password)
+      // Save encrypted recovery blob — for Google auth we use masterPassword as both keys
       saveRecoveryBlob(userCredential.user.uid, masterPassword, masterPassword).catch(() => {});
 
-      router.push('/dashboard');
+      await finishLoginOrChallenge(
+        userCredential.user.uid,
+        accountEmail,
+        userCredential.user.photoURL,
+        derivedKey,
+        masterPassword,
+        masterPassword, // Google users have no separate account password
+      );
     } catch (err: unknown) {
       setError((err as Error).message || 'Google sign-in failed.');
     } finally {
@@ -217,15 +270,14 @@ export default function AuthForm() {
       // Step 3: Derive vault key and unlock
       const derivedKey = deriveKey(decryptedMasterPassword, accountEmail);
 
-      setUser({
+      await finishLoginOrChallenge(
         uid,
-        email: accountEmail,
-        photoURL: auth.currentUser?.photoURL ?? null,
-      });
-      setMasterKey(derivedKey);
-      storeMasterPassword(decryptedMasterPassword);
-
-      router.push('/dashboard');
+        accountEmail,
+        auth.currentUser?.photoURL ?? null,
+        derivedKey,
+        decryptedMasterPassword,
+        accountPassword,
+      );
     } catch (err: unknown) {
       const msg = (err as Error).message || '';
       if (msg.toLowerCase().includes('cancel') || msg.toLowerCase().includes('abort') || msg.toLowerCase().includes('not allowed')) {
@@ -300,6 +352,25 @@ export default function AuthForm() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[var(--background)] text-[var(--foreground)] p-4 transition-colors duration-200">
+      {/* 2FA challenge modal */}
+      {pendingLogin && (
+        <TwoFactorChallenge
+          email={pendingLogin.email}
+          accountPassword={pendingLogin.accountPassword}
+          onVerified={() => completeLogin(
+            pendingLogin.uid,
+            pendingLogin.email,
+            pendingLogin.photoURL,
+            pendingLogin.masterKey,
+            pendingLogin.masterPasswordVal,
+          )}
+          onCancel={() => { setPendingLogin(null); setLoading(false); setPasskeyLoading(false); }}
+          verifyTotp={async (code) => {
+            if (!pendingLogin.totpSecret) return true; // no secret = pass
+            return verifyTotpCode(pendingLogin.totpSecret, code, pendingLogin.email);
+          }}
+        />
+      )}
       <div className="fixed right-4 top-4 z-10">
         <ThemeToggle />
       </div>

@@ -9,9 +9,10 @@ import { deleteUser, reauthenticateWithCredential, EmailAuthProvider, GoogleAuth
 import { decryptData, encryptData, deriveKey } from '@/lib/crypto';
 import { updatePasskeyMasterPassword } from '@/lib/passkey';
 import { saveRecoveryBlob } from '@/lib/recovery';
-import { Download, Upload, RefreshCcw, Trash2, User, ShieldAlert, Smartphone, AlertTriangle, X, Fingerprint } from 'lucide-react';
+import { Download, Upload, RefreshCcw, Trash2, User, ShieldAlert, Smartphone, AlertTriangle, X, Fingerprint, Shield } from 'lucide-react';
 import { usePwaInstall } from '@/hooks/usePwaInstall';
 import PasskeyManager from '@/components/PasskeyManager';
+import TwoFactorSetup from '@/components/TwoFactorSetup';
 
 type ImportTargetField = 'name' | 'username' | 'password' | 'url' | 'notes' | 'favorite' | 'createdAt' | 'updatedAt';
 
@@ -463,6 +464,105 @@ export default function SettingsPage() {
             </div>
           )}
 
+          <div className="p-4 bg-indigo-500/5 border border-indigo-500/20 rounded-xl space-y-4">
+            <div>
+              <h3 className="font-semibold text-slate-200 flex items-center gap-2">
+                <Shield className="w-5 h-5 text-indigo-400" />
+                Two-Factor Authentication (2FA)
+              </h3>
+              <p className="text-sm text-zinc-400 max-w-xl mt-1">
+                Require a TOTP code from your authenticator app on every login. If you lose access, recover via a one-time code sent to your email.
+              </p>
+            </div>
+            <TwoFactorSetup />
+          </div>
+          
+          <div className="p-4 bg-violet-500/5 border border-violet-500/20 rounded-xl space-y-4">
+            <div>
+              <h3 className="font-semibold text-slate-200 flex items-center gap-2">
+                <Fingerprint className="w-5 h-5 text-violet-400" />
+                Passkey &amp; Recovery
+              </h3>
+              <p className="text-sm text-zinc-400 max-w-xl mt-1">
+                Set up biometric login (Face ID, fingerprint, Windows Hello) and email recovery for your master password.
+              </p>
+            </div>
+            <PasskeyManager />
+          </div>
+
+          <div className="p-4 bg-indigo-500/5 border border-indigo-500/20 rounded-xl space-y-4">
+            <div>
+              <h3 className="font-semibold text-slate-200">Change Vault Master Password</h3>
+              <p className="text-sm text-zinc-400 max-w-xl">
+                Re-encrypt your vault using a new master password while you are unlocked.
+              </p>
+            </div>
+
+            <form className="space-y-3" onSubmit={handleChangeMasterPassword}>
+              <div>
+                <label className="text-xs text-zinc-400 block mb-1">Current Master Password</label>
+                <input
+                  type="password"
+                  value={currentMasterPasswordInput}
+                  onChange={(event) => setCurrentMasterPasswordInput(event.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-2 px-3 text-sm text-slate-200 outline-none focus:ring-2 focus:ring-indigo-500"
+                  placeholder="Current master password"
+                  minLength={8}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-zinc-400 block mb-1">New Master Password</label>
+                <input
+                  type="password"
+                  value={newMasterPasswordInput}
+                  onChange={(event) => setNewMasterPasswordInput(event.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-2 px-3 text-sm text-slate-200 outline-none focus:ring-2 focus:ring-indigo-500"
+                  placeholder="New master password"
+                  minLength={8}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-zinc-400 block mb-1">Confirm New Master Password</label>
+                <input
+                  type="password"
+                  value={confirmNewMasterPasswordInput}
+                  onChange={(event) => setConfirmNewMasterPasswordInput(event.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-2 px-3 text-sm text-slate-200 outline-none focus:ring-2 focus:ring-indigo-500"
+                  placeholder="Confirm new master password"
+                  minLength={8}
+                  required
+                />
+              </div>
+
+              {masterPasswordError ? (
+                <div className="rounded-xl border border-red-500/30 bg-red-500/10 text-red-300 px-3 py-2 text-sm">
+                  {masterPasswordError}
+                </div>
+              ) : null}
+
+              {masterPasswordMessage ? (
+                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 px-3 py-2 text-sm">
+                  {masterPasswordMessage}
+                </div>
+              ) : null}
+
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  disabled={loadingMasterPasswordChange}
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
+                >
+                  {loadingMasterPasswordChange ? <RefreshCcw className="w-4 h-4 animate-spin" /> : null}
+                  {loadingMasterPasswordChange ? 'Re-encrypting...' : 'Change Master Password'}
+                </button>
+              </div>
+            </form>
+          </div>
+
           <div className="p-4 bg-blue-500/5 border border-blue-500/20 rounded-xl">
             <div>
               <h3 className="font-semibold text-slate-200">Export Vault</h3>
@@ -578,91 +678,8 @@ export default function SettingsPage() {
             
           </div>
 
-          <div className="p-4 bg-indigo-500/5 border border-indigo-500/20 rounded-xl space-y-4">
-            <div>
-              <h3 className="font-semibold text-slate-200">Change Vault Master Password</h3>
-              <p className="text-sm text-zinc-400 max-w-xl">
-                Re-encrypt your vault using a new master password while you are unlocked.
-              </p>
-            </div>
-
-            <form className="space-y-3" onSubmit={handleChangeMasterPassword}>
-              <div>
-                <label className="text-xs text-zinc-400 block mb-1">Current Master Password</label>
-                <input
-                  type="password"
-                  value={currentMasterPasswordInput}
-                  onChange={(event) => setCurrentMasterPasswordInput(event.target.value)}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-2 px-3 text-sm text-slate-200 outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="Current master password"
-                  minLength={8}
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="text-xs text-zinc-400 block mb-1">New Master Password</label>
-                <input
-                  type="password"
-                  value={newMasterPasswordInput}
-                  onChange={(event) => setNewMasterPasswordInput(event.target.value)}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-2 px-3 text-sm text-slate-200 outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="New master password"
-                  minLength={8}
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="text-xs text-zinc-400 block mb-1">Confirm New Master Password</label>
-                <input
-                  type="password"
-                  value={confirmNewMasterPasswordInput}
-                  onChange={(event) => setConfirmNewMasterPasswordInput(event.target.value)}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-2 px-3 text-sm text-slate-200 outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="Confirm new master password"
-                  minLength={8}
-                  required
-                />
-              </div>
-
-              {masterPasswordError ? (
-                <div className="rounded-xl border border-red-500/30 bg-red-500/10 text-red-300 px-3 py-2 text-sm">
-                  {masterPasswordError}
-                </div>
-              ) : null}
-
-              {masterPasswordMessage ? (
-                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 px-3 py-2 text-sm">
-                  {masterPasswordMessage}
-                </div>
-              ) : null}
-
-              <div className="flex justify-end">
-                <button
-                  type="submit"
-                  disabled={loadingMasterPasswordChange}
-                  className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
-                >
-                  {loadingMasterPasswordChange ? <RefreshCcw className="w-4 h-4 animate-spin" /> : null}
-                  {loadingMasterPasswordChange ? 'Re-encrypting...' : 'Change Master Password'}
-                </button>
-              </div>
-            </form>
-          </div>
           
-          <div className="p-4 bg-violet-500/5 border border-violet-500/20 rounded-xl space-y-4">
-            <div>
-              <h3 className="font-semibold text-slate-200 flex items-center gap-2">
-                <Fingerprint className="w-5 h-5 text-violet-400" />
-                Passkey &amp; Recovery
-              </h3>
-              <p className="text-sm text-zinc-400 max-w-xl mt-1">
-                Set up biometric login (Face ID, fingerprint, Windows Hello) and email recovery for your master password.
-              </p>
-            </div>
-            <PasskeyManager />
-          </div>
+          
 
           <div className="flex flex-col items-start gap-3 p-4 bg-red-500/5 border border-red-500/20 rounded-xl sm:flex-row sm:items-center sm:justify-between">
             <div>

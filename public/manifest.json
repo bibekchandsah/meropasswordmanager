@@ -1,7 +1,7 @@
 {
-  "name": "meropasswordmanager",
-  "short_name": "meropm",
-  "description": "meropasswordmanager is a secure, client-side encrypted zero-knowledge password manager.",
+  "name": "Mero Password Manager",
+  "short_name": "Mero Passwords",
+  "description": "MeroPasswordManager is a secure, client-side encrypted zero-knowledge password manager.",
   "id": "/",
   "start_url": "/",
   "scope": "/",

@@ -1,6 +1,6 @@
 {
- "name": "meropasswordmanager",
- "short_name": "meropm",
+ "name": "Mero Password Manager",
+ "short_name": "Mero Passwords",
  "theme_color": "#ffffff",
  "background_color": "#ffffff",
  "display": "standalone",

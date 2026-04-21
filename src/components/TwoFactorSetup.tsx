@@ -13,7 +13,7 @@ type TwoFAStatus = 'loading' | 'disabled' | 'setup' | 'enabled';
 export default function TwoFactorSetup() {
   const { user, masterKey } = useStore();
 
-  const [status, setStatus] = useState<TwoFAStatus>('loading');
+  const [status, setStatus] = useState<TwoFAStatus>('disabled');
   const [secret, setSecret] = useState('');
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [verifyCode, setVerifyCode] = useState('');
@@ -26,7 +26,8 @@ export default function TwoFactorSetup() {
   const [copied, setCopied] = useState(false);
 
   const load2FAStatus = useCallback(async () => {
-    if (!user || !masterKey) return;
+    if (!user || !masterKey) return; // vault locked — stay on current status, don't show spinner
+    setStatus('loading');
     try {
       const snap = await getDoc(doc(db, 'users', user.uid, '2fa', 'totp'));
       if (snap.exists() && snap.data()?.enabled === true) {

@@ -437,15 +437,19 @@ export default function SettingsPage() {
 
         <div className="space-y-6">
           {!isInstalled && (
-            <div className="p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl">
+            <div className="p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
                 <h3 className="font-semibold text-slate-200">Install App (PWA)</h3>
                 <p className="text-sm text-zinc-400 max-w-xl">
                   Install Mero Password Manager for a native app-like experience with faster launch and offline shell support.
                 </p>
+                {!canInstall && (
+                  <p className="text-xs text-zinc-500 mt-1">
+                    Installation is not available, or the app is already installed.
+                  </p>
+                )}
               </div>
-
-              <div className="mt-3 flex flex-wrap items-center gap-3">
+              <div className="flex-shrink-0">
                 <button
                   onClick={handleInstallApp}
                   disabled={isInstallFlowRunning || !canInstall}
@@ -454,38 +458,36 @@ export default function SettingsPage() {
                   {isInstallFlowRunning ? <RefreshCcw className="w-4 h-4 animate-spin" /> : <Smartphone className="w-4 h-4" />}
                   {isInstallFlowRunning ? 'Opening...' : 'Install App'}
                 </button>
-
-                {!canInstall && (
-                  <p className="text-xs text-zinc-500">
-                    Installation is not available, or the app is already installed.
-                  </p>
-                )}
               </div>
             </div>
           )}
 
           <div className="p-4 bg-indigo-500/5 border border-indigo-500/20 rounded-xl space-y-4">
-            <div>
-              <h3 className="font-semibold text-slate-200 flex items-center gap-2">
-                <Shield className="w-5 h-5 text-indigo-400" />
-                Two-Factor Authentication (2FA)
-              </h3>
-              <p className="text-sm text-zinc-400 max-w-xl mt-1">
-                Require a TOTP code from your authenticator app on every login. If you lose access, recover via a one-time code sent to your email.
-              </p>
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+              <div>
+                <h3 className="font-semibold text-slate-200 flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-indigo-400" />
+                  Two-Factor Authentication (2FA)
+                </h3>
+                <p className="text-sm text-zinc-400 max-w-xl mt-1">
+                  Require a TOTP code from your authenticator app on every login. If you lose access, recover via a one-time code sent to your email.
+                </p>
+              </div>
             </div>
             <TwoFactorSetup />
           </div>
           
           <div className="p-4 bg-violet-500/5 border border-violet-500/20 rounded-xl space-y-4">
-            <div>
-              <h3 className="font-semibold text-slate-200 flex items-center gap-2">
-                <Fingerprint className="w-5 h-5 text-violet-400" />
-                Passkey &amp; Recovery
-              </h3>
-              <p className="text-sm text-zinc-400 max-w-xl mt-1">
-                Set up biometric login (Face ID, fingerprint, Windows Hello) and email recovery for your master password.
-              </p>
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+              <div>
+                <h3 className="font-semibold text-slate-200 flex items-center gap-2">
+                  <Fingerprint className="w-5 h-5 text-violet-400" />
+                  Passkey &amp; Recovery
+                </h3>
+                <p className="text-sm text-zinc-400 max-w-xl mt-1">
+                  Set up biometric login (Face ID, fingerprint, Windows Hello) and email recovery for your master password.
+                </p>
+              </div>
             </div>
             <PasskeyManager />
           </div>
@@ -563,13 +565,12 @@ export default function SettingsPage() {
             </form>
           </div>
 
-          <div className="p-4 bg-blue-500/5 border border-blue-500/20 rounded-xl">
+          <div className="p-4 bg-blue-500/5 border border-blue-500/20 rounded-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <h3 className="font-semibold text-slate-200">Export Vault</h3>
               <p className="text-sm text-zinc-400 max-w-xl">Download a decrypted copy of your vault in CSV format. Keep this file safe.</p>
             </div>
-
-            <div className="mt-3">
+            <div className="flex-shrink-0">
               <button
                 onClick={handleExportCsv}
                 disabled={loadingCsvExport}
@@ -582,28 +583,28 @@ export default function SettingsPage() {
           </div>
 
           <div className="p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-xl space-y-4">
-            <div>
-              <h3 className="font-semibold text-slate-200">Import from CSV</h3>
-              <p className="text-sm text-zinc-400 max-w-xl">
-                Upload a CSV, verify smart column mapping, then import into your encrypted vault.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <label className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap">
-                <Upload className="w-4 h-4" />
-                Choose CSV
-                <input type="file" accept=".csv,text/csv" className="hidden" onChange={handleCsvPicked} />
-              </label>
-
-              <button
-                onClick={handleImportCsv}
-                disabled={loadingImport || !mappingReady || csvRows.length === 0}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed min-w-[160px] justify-center whitespace-nowrap"
-              >
-                {loadingImport ? <RefreshCcw className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                {loadingImport ? 'Importing...' : 'Import to Vault'}
-              </button>
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+              <div>
+                <h3 className="font-semibold text-slate-200">Import from CSV</h3>
+                <p className="text-sm text-zinc-400 max-w-xl">
+                  Upload a CSV, verify smart column mapping, then import into your encrypted vault.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
+                <label className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap">
+                  <Upload className="w-4 h-4" />
+                  Choose CSV
+                  <input type="file" accept=".csv,text/csv" className="hidden" onChange={handleCsvPicked} />
+                </label>
+                <button
+                  onClick={handleImportCsv}
+                  disabled={loadingImport || !mappingReady || csvRows.length === 0}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed min-w-[160px] justify-center whitespace-nowrap"
+                >
+                  {loadingImport ? <RefreshCcw className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                  {loadingImport ? 'Importing...' : 'Import to Vault'}
+                </button>
+              </div>
             </div>
 
             {csvFileName ? (

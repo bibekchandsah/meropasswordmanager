@@ -148,7 +148,7 @@ export default function PasskeyManager() {
     <div className="space-y-4">
       {/* Passkey registration / removal */}
       <div className="p-4 bg-violet-500/5 border border-violet-500/20 rounded-xl space-y-3">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1">
               <Fingerprint className="w-5 h-5 text-violet-400" />
@@ -169,6 +169,29 @@ export default function PasskeyManager() {
                 : 'Register your device biometrics (Face ID, fingerprint, Windows Hello) to sign in without typing any password.'}
             </p>
           </div>
+          {!showAccountPasswordField && (
+            <div className="flex-shrink-0">
+              {!registered ? (
+                <button
+                  onClick={handleRegister}
+                  disabled={registerLoading || !isVaultUnlocked}
+                  className="bg-violet-600 hover:bg-violet-500 text-white font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
+                >
+                  {registerLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Fingerprint className="w-4 h-4" />}
+                  {registerLoading ? 'Registering...' : 'Set Up Passkey'}
+                </button>
+              ) : (
+                <button
+                  onClick={handleRemove}
+                  disabled={!isVaultUnlocked}
+                  className="bg-red-500/10 hover:bg-red-500 hover:text-white border border-red-500/50 text-red-400 font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-red-500/10 disabled:hover:text-red-400"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Remove Passkey
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {!isVaultUnlocked && (
@@ -196,30 +219,19 @@ export default function PasskeyManager() {
           </div>
         )}
 
-        <div className="flex flex-wrap gap-2">
-          {!registered ? (
+        {/* When account password field is shown, show Continue button below it */}
+        {showAccountPasswordField && !registered && (
+          <div className="flex justify-end">
             <button
               onClick={handleRegister}
               disabled={registerLoading || !isVaultUnlocked}
               className="bg-violet-600 hover:bg-violet-500 text-white font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
             >
-              {registerLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Fingerprint className="w-4 h-4" />
-              )}
-              {registerLoading ? 'Registering...' : showAccountPasswordField ? 'Continue' : 'Set Up Passkey'}
+              {registerLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Fingerprint className="w-4 h-4" />}
+              {registerLoading ? 'Registering...' : 'Continue'}
             </button>
-          ) : (
-            <button
-              onClick={handleRemove}
-              className="bg-red-500/10 hover:bg-red-500 hover:text-white border border-red-500/50 text-red-400 font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap"
-            >
-              <Trash2 className="w-4 h-4" />
-              Remove Passkey
-            </button>
-          )}
-        </div>
+          </div>
+        )}
 
         {registerError && (
           <div className="rounded-xl border border-red-500/30 bg-red-500/10 text-red-300 px-3 py-2 text-sm">
@@ -235,35 +247,32 @@ export default function PasskeyManager() {
 
       {/* Email recovery */}
       <div className="p-4 bg-sky-500/5 border border-sky-500/20 rounded-xl space-y-3">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Mail className="w-5 h-5 text-sky-400" />
-            <h3 className="font-semibold text-slate-200">Email Master Password</h3>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <Mail className="w-5 h-5 text-sky-400" />
+              <h3 className="font-semibold text-slate-200">Email Master Password</h3>
+            </div>
+            <p className="text-sm text-zinc-400 max-w-xl">
+              Send your current master password to <strong className="text-zinc-300">{user?.email}</strong> as a backup. Delete the email after saving it somewhere safe.
+            </p>
+            {!isVaultUnlocked && (
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300 mt-2">
+                Your vault is locked. Unlock it first to use this feature.
+              </div>
+            )}
           </div>
-          <p className="text-sm text-zinc-400 max-w-xl">
-            Send your current master password to <strong className="text-zinc-300">{user?.email}</strong> as a backup. Delete the email after saving it somewhere safe.
-          </p>
+          <div className="flex-shrink-0">
+            <button
+              onClick={handleSendEmail}
+              disabled={emailLoading || !isVaultUnlocked}
+              className="bg-sky-600 hover:bg-sky-500 text-white font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
+            >
+              {emailLoading ? <RefreshCcw className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+              {emailLoading ? 'Sending...' : 'Send to My Email'}
+            </button>
+          </div>
         </div>
-
-        {!isVaultUnlocked && (
-          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
-            Your vault is locked. Unlock it first to use this feature.
-          </div>
-        )}
-
-        <button
-          onClick={handleSendEmail}
-          disabled={emailLoading || !isVaultUnlocked}
-          className="bg-sky-600 hover:bg-sky-500 text-white font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
-        >
-          {emailLoading ? (
-            <RefreshCcw className="w-4 h-4 animate-spin" />
-          ) : (
-            <Mail className="w-4 h-4" />
-          )}
-          {emailLoading ? 'Sending...' : 'Send to My Email'}
-        </button>
-
         {emailError && (
           <div className="rounded-xl border border-red-500/30 bg-red-500/10 text-red-300 px-3 py-2 text-sm">
             {emailError}

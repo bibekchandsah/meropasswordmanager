@@ -174,17 +174,19 @@ export default function TwoFactorSetup() {
 
       {/* Disabled state */}
       {status === 'disabled' && isVaultUnlocked && (
-        <div className="space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <p className="text-sm text-zinc-400">
             Add an extra layer of security. After enabling, every login will require a 6-digit code from your authenticator app (Google Authenticator, Authy, 1Password, etc.).
           </p>
-          <button
-            onClick={handleStartSetup}
-            className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap"
-          >
-            <QrCode className="w-4 h-4" />
-            Set Up 2FA
-          </button>
+          <div className="flex-shrink-0">
+            <button
+              onClick={handleStartSetup}
+              className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap"
+            >
+              <QrCode className="w-4 h-4" />
+              Set Up 2FA
+            </button>
+          </div>
         </div>
       )}
 
@@ -263,19 +265,23 @@ export default function TwoFactorSetup() {
       {/* Enabled state */}
       {status === 'enabled' && isVaultUnlocked && (
         <div className="space-y-3">
-          <p className="text-sm text-zinc-400">
-            2FA is active. Every login requires a code from your authenticator app. If you lose access, you can recover via email OTP on the login screen.
-          </p>
-
-          {!showDisableForm ? (
-            <button
-              onClick={() => { setShowDisableForm(true); setDisableCode(''); setDisableError(''); }}
-              className="bg-red-500/10 hover:bg-red-500 hover:text-white border border-red-500/50 text-red-400 font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap"
-            >
-              <ShieldOff className="w-4 h-4" />
-              Disable 2FA
-            </button>
-          ) : (
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <p className="text-sm text-zinc-400">
+              2FA is active. Every login requires a code from your authenticator app. If you lose access, you can recover via email OTP on the login screen.
+            </p>
+            {!showDisableForm && (
+              <div className="flex-shrink-0">
+                <button
+                  onClick={() => { setShowDisableForm(true); setDisableCode(''); setDisableError(''); }}
+                  className="bg-red-500/10 hover:bg-red-500 hover:text-white border border-red-500/50 text-red-400 font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap"
+                >
+                  <ShieldOff className="w-4 h-4" />
+                  Disable 2FA
+                </button>
+              </div>
+            )}
+          </div>
+          {showDisableForm && (
             <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4 space-y-3">
               <p className="text-sm text-slate-200 font-medium">Confirm with your authenticator code</p>
               <input

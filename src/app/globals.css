@@ -170,11 +170,21 @@ html[data-theme='light'] .shadow-black\/10 {
 
 /* ── Dropdown / menu hover — guaranteed not purged ─────────────────────── */
 .dropdown-item:hover {
-  background-color: #3f3f46 !important; /* zinc-700 */
-  color: #f4f4f5 !important;            /* zinc-100 */
+  background-color: #3f3f46 !important; /* zinc-700 for dark mode */
+  color: #f4f4f5 !important;            /* zinc-100 for dark mode */
+}
+
+html[data-theme='light'] .dropdown-item:hover {
+  background-color: var(--surface-3) !important;
+  color: var(--foreground) !important;
 }
 
 .dropdown-item-danger:hover {
   background-color: rgba(239, 68, 68, 0.15) !important;
   color: #fca5a5 !important; /* red-300 */
+}
+
+html[data-theme='light'] .dropdown-item-danger:hover {
+  background-color: rgba(239, 68, 68, 0.1) !important;
+  color: #dc2626 !important; /* red-600 */
 }

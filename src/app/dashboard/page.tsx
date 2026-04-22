@@ -644,21 +644,21 @@ export default function Dashboard() {
                       const normalizedUrl = getNormalizedUrl(item.url);
                       const strengthBorder = getPasswordStrengthBorder(item.password || '');
                       return (
-                        <div key={item.id} className="flex items-center gap-3 rounded-xl bg-zinc-950/60 border border-zinc-800 px-3 py-2">
+                        <div key={item.id} className={`relative flex items-center gap-3 rounded-xl bg-zinc-950/60 border border-zinc-800 border-b-2 ${strengthBorder} px-3 py-2.5 overflow-hidden transition-all hover:bg-zinc-950/80`}>
                           <div className="h-7 w-7 rounded-lg bg-zinc-800 border border-zinc-700 overflow-hidden flex-shrink-0">
                             <Favicon url={item.url} alt={item.siteName} />
                           </div>
                           <div className="flex-1 min-w-0">
                             {normalizedUrl ? (
                               <a href={normalizedUrl} target="_blank" rel="noopener noreferrer"
-                                className="text-xs font-medium text-slate-200 hover:text-emerald-400 transition-colors truncate block">
+                                className="text-xs font-semibold text-slate-100 hover:text-emerald-400 transition-colors truncate block">
                                 {item.siteName}
                               </a>
                             ) : (
-                              <p className="text-xs font-medium text-slate-200 truncate">{item.siteName}</p>
+                              <p className="text-xs font-semibold text-slate-100 truncate">{item.siteName}</p>
                             )}
-                            <div className={`mt-1 rounded bg-zinc-900 border border-zinc-800 border-b-2 ${strengthBorder} px-2 py-0.5 font-mono text-[10px] text-zinc-400`}>
-                              {recentVisiblePasswords[item.id] ? (item.password || '—') : '••••••••••'}
+                            <div className="mt-1 font-mono text-[11px] text-zinc-500 flex items-center gap-1.5">
+                              <span>{recentVisiblePasswords[item.id] ? (item.password || '—') : '••••••••••'}</span>
                             </div>
                           </div>
                           <div className="flex items-center gap-0.5 flex-shrink-0">

@@ -118,20 +118,24 @@ html[data-theme='light'] .border-zinc-700 {
   border-color: var(--border-color) !important;
 }
 
-html[data-theme='light'] .border-b-red-500 {
+html[data-theme='light'] div.border-b-red-500 {
   border-bottom-color: #ef4444 !important;
 }
 
-html[data-theme='light'] .border-b-yellow-400 {
+html[data-theme='light'] div.border-b-yellow-400 {
   border-bottom-color: #facc15 !important;
 }
 
-html[data-theme='light'] .border-b-blue-500 {
+html[data-theme='light'] div.border-b-blue-500 {
   border-bottom-color: #3b82f6 !important;
 }
 
-html[data-theme='light'] .border-b-green-500 {
-  border-bottom-color: #22c55e !important;
+html[data-theme='light'] div.border-b-emerald-500 {
+  border-bottom-color: #10b981 !important;
+}
+
+html[data-theme='light'] div.border-b-emerald-400 {
+  border-bottom-color: #34d399 !important;
 }
 
 html[data-theme='light'] .text-slate-100,

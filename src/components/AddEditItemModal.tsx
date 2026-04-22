@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { VaultItem } from '@/types/vault';
-import { generatePassword } from '@/lib/passwordGen';
+import { generatePassword, generateSmartSuggestions } from '@/lib/passwordGen';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, RefreshCcw, Save, Loader2, Link2, KeyRound, Type, AlignLeft, Globe } from 'lucide-react';
 import Favicon from './Favicon';
@@ -21,6 +21,7 @@ export default function AddEditItemModal({ isOpen, onClose, onSave, initialData 
   const [url, setUrl] = useState('');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
 
   const getPasswordStrength = (
     value: string
@@ -58,6 +59,7 @@ export default function AddEditItemModal({ isOpen, onClose, onSave, initialData 
       setUrl('');
       setNotes('');
       setLoading(false);
+      setSuggestions([]);
     }
   }, [initialData, isOpen]);
 
@@ -77,7 +79,12 @@ export default function AddEditItemModal({ isOpen, onClose, onSave, initialData 
   };
 
   const handleGenPwd = () => {
-    setPassword(generatePassword(20, true, true));
+    if (password.trim().length > 0) {
+      setSuggestions(generateSmartSuggestions(password));
+    } else {
+      setPassword(generatePassword(20, true, true));
+      setSuggestions([]);
+    }
   };
 
   const formatTimestamp = (value?: number) => {
@@ -200,6 +207,47 @@ export default function AddEditItemModal({ isOpen, onClose, onSave, initialData 
                       </div>
                     </div>
                   ) : null}
+
+                  {/* Smart Suggestions */}
+                  <AnimatePresence>
+                    {suggestions.length > 0 && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="mt-4 space-y-2 overflow-hidden"
+                      >
+                        <div className="flex items-center justify-between h-5">
+                          <span className="text-[10px] uppercase tracking-wider font-bold text-zinc-500">Pick an Excellent upgrade</span>
+                          <button 
+                            type="button" 
+                            onClick={() => setSuggestions([])}
+                            className="text-[10px] text-zinc-500 hover:text-slate-200 transition-colors cursor-pointer"
+                          >
+                            Dismiss
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-1 gap-2">
+                          {suggestions.map((s, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => { setPassword(s); setSuggestions([]); }}
+                              className="flex items-center justify-between w-full bg-zinc-950/40 border border-zinc-800 p-3 rounded-xl hover:border-emerald-500/40 hover:bg-emerald-500/[0.03] transition-all text-left group cursor-pointer"
+                            >
+                              <span className="text-xs font-mono text-zinc-400 group-hover:text-emerald-300 truncate pr-4">{s}</span>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <span className="text-[9px] bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/20 font-bold">EXCELLENT</span>
+                                <div className="p-1 rounded-lg bg-zinc-800 text-zinc-500 group-hover:bg-emerald-500 group-hover:text-zinc-950 transition-colors">
+                                  <Save className="w-3.5 h-3.5" />
+                                </div>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
 
                 <div className="md:col-span-2">

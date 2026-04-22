@@ -91,12 +91,15 @@ html[data-theme='light'] * {
 }
 
 html[data-theme='light'] .bg-zinc-950,
+html[data-theme='light'] .bg-zinc-950\/40,
 html[data-theme='light'] .bg-zinc-950\/50,
 html[data-theme='light'] .bg-zinc-950\/60 {
   background-color: var(--surface-1) !important;
 }
 
 html[data-theme='light'] .bg-zinc-900,
+html[data-theme='light'] .bg-zinc-900\/30,
+html[data-theme='light'] .bg-zinc-900\/50,
 html[data-theme='light'] .bg-zinc-900\/60,
 html[data-theme='light'] .bg-zinc-900\/70 {
   background-color: var(--surface-2) !important;
@@ -160,6 +163,12 @@ html[data-theme='light'] .hover\:bg-zinc-700:hover {
 html[data-theme='light'] .hover\:text-zinc-200:hover,
 html[data-theme='light'] .hover\:text-zinc-300:hover {
   color: #0f172a !important;
+}
+
+html[data-theme='light'] select,
+html[data-theme='light'] select option {
+  background-color: var(--surface-1) !important;
+  color: var(--foreground) !important;
 }
 
 html[data-theme='light'] .shadow-black\/40,

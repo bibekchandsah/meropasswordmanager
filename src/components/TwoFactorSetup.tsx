@@ -11,9 +11,8 @@ import QRCode from 'qrcode';
 type TwoFAStatus = 'loading' | 'disabled' | 'setup' | 'enabled';
 
 export default function TwoFactorSetup() {
-  const { user, masterKey } = useStore();
+  const { user, masterKey, twoFAStatus: status, setTwoFAStatus: setStatus } = useStore();
 
-  const [status, setStatus] = useState<TwoFAStatus>('disabled');
   const [secret, setSecret] = useState('');
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [verifyCode, setVerifyCode] = useState('');
@@ -155,18 +154,6 @@ export default function TwoFactorSetup() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        {status === 'enabled' ? (
-          <span className="text-xs bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full flex items-center gap-1">
-            <ShieldCheck className="w-3 h-3" /> Enabled
-          </span>
-        ) : (
-          <span className="text-xs bg-zinc-500/15 text-zinc-400 border border-zinc-500/30 px-2 py-0.5 rounded-full flex items-center gap-1">
-            <ShieldOff className="w-3 h-3" /> Disabled
-          </span>
-        )}
-      </div>
-
       {!isVaultUnlocked && (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
           Your vault is locked. Unlock it first to manage 2FA.
@@ -177,7 +164,7 @@ export default function TwoFactorSetup() {
       {status === 'disabled' && isVaultUnlocked && (
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <p className="text-sm text-zinc-400">
-            Add an extra layer of security. After enabling, every login will require a 6-digit code from your authenticator app (Google Authenticator, Authy, 1Password, etc.).
+            Add an extra layer of security. After enabling, every login will require a 6-digit code from your authenticator app (Google Authenticator, Microsoft Authenticator, Authy, 1Password, etc.).
           </p>
           <div className="flex-shrink-0">
             <button

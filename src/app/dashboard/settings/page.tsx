@@ -9,10 +9,11 @@ import { deleteUser, reauthenticateWithCredential, EmailAuthProvider, GoogleAuth
 import { decryptData, encryptData, deriveKey } from '@/lib/crypto';
 import { updatePasskeyMasterPassword } from '@/lib/passkey';
 import { saveRecoveryBlob } from '@/lib/recovery';
-import { Download, Upload, RefreshCcw, Trash2, User, ShieldAlert, Smartphone, AlertTriangle, X, Fingerprint, Shield } from 'lucide-react';
+import { Download, Upload, RefreshCcw, Trash2, User, ShieldAlert, Smartphone, AlertTriangle, X, Fingerprint, Shield, Database, Lock, Settings, FileText, LayoutDashboard, ShieldCheck, ShieldOff, Loader2 } from 'lucide-react';
 import { usePwaInstall } from '@/hooks/usePwaInstall';
 import PasskeyManager from '@/components/PasskeyManager';
 import TwoFactorSetup from '@/components/TwoFactorSetup';
+import { motion, AnimatePresence } from 'framer-motion';
 
 type ImportTargetField = 'name' | 'username' | 'password' | 'url' | 'notes' | 'favorite' | 'createdAt' | 'updatedAt';
 
@@ -30,7 +31,7 @@ const FIELD_LABELS: Record<ImportTargetField, string> = {
 type CsvRow = Record<string, string>;
 
 export default function SettingsPage() {
-  const { user, masterKey, masterPassword, setMasterKey, setMasterPassword } = useStore();
+  const { user, masterKey, masterPassword, setMasterKey, setMasterPassword, twoFAStatus } = useStore();
   const router = useRouter();
   const { canInstall, isInstalled, isInstallFlowRunning, handleInstallApp } = usePwaInstall();
 
@@ -66,6 +67,9 @@ export default function SettingsPage() {
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [loadingDelete, setLoadingDelete] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  
+  type Section = 'security' | 'data' | 'account' | 'app';
+  const [activeSection, setActiveSection] = useState<Section>('security');
 
   useEffect(() => {
     if (!user) {
@@ -403,304 +407,457 @@ export default function SettingsPage() {
     }
     return previewRow;
   });
+  const sidebarItems: { id: Section; label: string; icon: React.ElementType; color: string }[] = [
+    { id: 'security', label: 'Security', icon: Shield,     color: 'text-blue-400' },
+    { id: 'data',     label: 'Data',     icon: Database,   color: 'text-emerald-400' },
+    { id: 'account',  label: 'Account',  icon: User,       color: 'text-indigo-400' },
+    { id: 'app',      label: 'Native App', icon: Smartphone, color: 'text-amber-400' },
+  ];
 
   return (
-    <div className="flex flex-col h-full gap-6">
-      <div>
-        <h1 className="text-3xl font-bold text-slate-100">Settings</h1>
-        <p className="text-zinc-400 text-sm mt-1">Manage your account and preferences</p>
+    <div className="flex flex-col h-full gap-5">
+      <div className="flex items-center gap-3">
+        <div className="p-2.5 rounded-2xl bg-zinc-900 border border-zinc-800 text-zinc-400 shadow-lg shadow-black/20">
+          <Settings className="w-6 h-6" />
+        </div>
+        <div>
+          <h1 className="text-3xl font-bold text-slate-100 tracking-tight">Vault Settings</h1>
+          <p className="text-zinc-500 text-sm">Control your security, data, and access preferences.</p>
+        </div>
       </div>
 
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 md:p-8 mt-4 w-full max-w-3xl">
-        <h2 className="text-xl font-bold mb-6 flex items-center gap-2 text-emerald-500 border-b border-zinc-800 pb-4">
-          <User className="w-5 h-5" /> Account Details
-        </h2>
-        
-        <div className="space-y-4 mb-10">
-          <div>
-            <label className="text-sm font-medium text-zinc-500 block mb-1">Email / Username</label>
-            <div className="bg-zinc-950 border border-zinc-800 px-4 py-3 rounded-xl text-slate-300 font-mono">
-              {user?.email}
-            </div>
-          </div>
-          <div>
-            <label className="text-sm font-medium text-zinc-500 block mb-1">Account UID</label>
-            <div className="bg-zinc-950 border border-zinc-800 px-4 py-3 rounded-xl text-slate-300 font-mono text-xs">
-              {user?.uid}
-            </div>
-          </div>
+      <div className="flex flex-col lg:flex-row gap-6 mt-2 flex-1 min-h-0">
+        {/* Settings Sidebar */}
+        <div className="w-full lg:w-64 flex flex-row lg:flex-col gap-1 overflow-x-auto lg:overflow-visible pb-2 lg:pb-0 scrollbar-none">
+          {sidebarItems.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setActiveSection(item.id)}
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all cursor-pointer whitespace-nowrap lg:w-full ${
+                activeSection === item.id 
+                  ? 'bg-zinc-900 text-slate-100 shadow-md shadow-black/40 ring-1 ring-zinc-800' 
+                  : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/50'
+              }`}
+            >
+              <item.icon className={`w-4 h-4 ${activeSection === item.id ? item.color : ''}`} />
+              {item.label}
+              {activeSection === item.id && (
+                <motion.div layoutId="activeHighlight" className="ml-auto hidden lg:block w-1 h-3 rounded-full bg-emerald-500" />
+              )}
+            </button>
+          ))}
         </div>
 
-        <h2 className="text-xl font-bold mb-6 flex items-center gap-2 text-blue-500 border-b border-zinc-800 pb-4">
-          <ShieldAlert className="w-5 h-5" /> Advanced Features
-        </h2>
-
-        <div className="space-y-6">
-          {!isInstalled && (
-            <div className="p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div>
-                <h3 className="font-semibold text-slate-200">Install App</h3>
-                <p className="text-sm text-zinc-400 max-w-xl">
-                  Install Mero Password Manager for a native app-like experience with faster launch and offline shell support.
-                </p>
-                {!canInstall && (
-                  <p className="text-xs text-zinc-500 mt-1">
-                    Installation is not available, or the app is already installed.
-                  </p>
-                )}
-              </div>
-              <div className="flex-shrink-0">
-                <button
-                  onClick={handleInstallApp}
-                  disabled={isInstallFlowRunning || !canInstall}
-                  className="bg-amber-500 hover:bg-amber-400 text-zinc-950 font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer min-w-[150px] justify-center whitespace-nowrap"
-                >
-                  {isInstallFlowRunning ? <RefreshCcw className="w-4 h-4 animate-spin" /> : <Smartphone className="w-4 h-4" />}
-                  {isInstallFlowRunning ? 'Opening...' : 'Install App'}
-                </button>
-              </div>
-            </div>
-          )}
-
-          <div className="p-4 bg-indigo-500/5 border border-indigo-500/20 rounded-xl space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-              <div>
-                <h3 className="font-semibold text-slate-200 flex items-center gap-2">
-                  <Shield className="w-5 h-5 text-indigo-400" />
-                  Two-Factor Authentication (2FA)
-                </h3>
-                <p className="text-sm text-zinc-400 max-w-xl mt-1">
-                  Require a TOTP code from your authenticator app on every login. If you lose access, recover via a one-time code sent to your email.
-                </p>
-              </div>
-            </div>
-            <TwoFactorSetup />
-          </div>
-          
-          <div className="p-4 bg-violet-500/5 border border-violet-500/20 rounded-xl space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-              <div>
-                <h3 className="font-semibold text-slate-200 flex items-center gap-2">
-                  <Fingerprint className="w-5 h-5 text-violet-400" />
-                  Passkey &amp; Recovery
-                </h3>
-                <p className="text-sm text-zinc-400 max-w-xl mt-1">
-                  Set up biometric login (Face ID, fingerprint, Windows Hello) and email recovery for your master password.
-                </p>
-              </div>
-            </div>
-            <PasskeyManager />
-          </div>
-
-          <div className="p-4 bg-indigo-500/5 border border-indigo-500/20 rounded-xl space-y-4">
-            <div>
-              <h3 className="font-semibold text-slate-200">Change Vault Master Password</h3>
-              <p className="text-sm text-zinc-400 max-w-xl">
-                Re-encrypt your vault using a new master password while you are unlocked.
-              </p>
-            </div>
-
-            <form className="space-y-3" onSubmit={handleChangeMasterPassword}>
-              <div>
-                <label className="text-xs text-zinc-400 block mb-1">Current Master Password</label>
-                <input
-                  type="password"
-                  value={currentMasterPasswordInput}
-                  onChange={(event) => setCurrentMasterPasswordInput(event.target.value)}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-2 px-3 text-sm text-slate-200 outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="Current master password"
-                  minLength={8}
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="text-xs text-zinc-400 block mb-1">New Master Password</label>
-                <input
-                  type="password"
-                  value={newMasterPasswordInput}
-                  onChange={(event) => setNewMasterPasswordInput(event.target.value)}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-2 px-3 text-sm text-slate-200 outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="New master password"
-                  minLength={8}
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="text-xs text-zinc-400 block mb-1">Confirm New Master Password</label>
-                <input
-                  type="password"
-                  value={confirmNewMasterPasswordInput}
-                  onChange={(event) => setConfirmNewMasterPasswordInput(event.target.value)}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-2 px-3 text-sm text-slate-200 outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="Confirm new master password"
-                  minLength={8}
-                  required
-                />
-              </div>
-
-              {masterPasswordError ? (
-                <div className="rounded-xl border border-red-500/30 bg-red-500/10 text-red-300 px-3 py-2 text-sm">
-                  {masterPasswordError}
-                </div>
-              ) : null}
-
-              {masterPasswordMessage ? (
-                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 px-3 py-2 text-sm">
-                  {masterPasswordMessage}
-                </div>
-              ) : null}
-
-              <div className="flex justify-end">
-                <button
-                  type="submit"
-                  disabled={loadingMasterPasswordChange}
-                  className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
-                >
-                  {loadingMasterPasswordChange ? <RefreshCcw className="w-4 h-4 animate-spin" /> : null}
-                  {loadingMasterPasswordChange ? 'Re-encrypting...' : 'Change Master Password'}
-                </button>
-              </div>
-            </form>
-          </div>
-
-          <div className="p-4 bg-blue-500/5 border border-blue-500/20 rounded-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h3 className="font-semibold text-slate-200">Export Vault</h3>
-              <p className="text-sm text-zinc-400 max-w-xl">Download a decrypted copy of your vault in CSV format. Keep this file safe.</p>
-            </div>
-            <div className="flex-shrink-0">
-              <button
-                onClick={handleExportCsv}
-                disabled={loadingCsvExport}
-                className="bg-cyan-600 hover:bg-cyan-500 text-white font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all disabled:opacity-50 cursor-pointer min-w-[124px] justify-center whitespace-nowrap"
-              >
-                {loadingCsvExport ? <RefreshCcw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                {loadingCsvExport ? 'Exporting...' : 'Export CSV'}
-              </button>
-            </div>
-          </div>
-
-          <div className="p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-xl space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-              <div>
-                <h3 className="font-semibold text-slate-200">Import from CSV</h3>
-                <p className="text-sm text-zinc-400 max-w-xl">
-                  Upload a CSV, verify smart column mapping, then import into your encrypted vault.
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
-                <label className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap">
-                  <Upload className="w-4 h-4" />
-                  Choose CSV
-                  <input type="file" accept=".csv,text/csv" className="hidden" onChange={handleCsvPicked} />
-                </label>
-                <button
-                  onClick={handleImportCsv}
-                  disabled={loadingImport || !mappingReady || csvRows.length === 0}
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed min-w-[160px] justify-center whitespace-nowrap"
-                >
-                  {loadingImport ? <RefreshCcw className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                  {loadingImport ? 'Importing...' : 'Import to Vault'}
-                </button>
-              </div>
-            </div>
-
-            {csvFileName ? (
-              <div className="text-xs text-emerald-300">
-                Loaded: <span className="font-semibold">{csvFileName}</span> ({csvRows.length} rows)
-              </div>
-            ) : null}
-
-            {csvHeaders.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {(Object.keys(FIELD_LABELS) as ImportTargetField[]).map((field) => (
-                  <div key={field}>
-                    <label className="text-xs text-zinc-400 block mb-1">{FIELD_LABELS[field]}</label>
-                    <select
-                      value={mapping[field] ?? '__ignore__'}
-                      onChange={(event) => handleMappingChange(field, event.target.value)}
-                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-2 px-3 text-sm text-slate-200 outline-none focus:ring-2 focus:ring-emerald-500"
-                    >
-                      <option value="__ignore__">Ignore this field</option>
-                      {csvHeaders.map((header) => (
-                        <option key={`${field}-${header}`} value={header}>
-                          {header}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-
-            {csvHeaders.length > 0 ? (
-              <div className="rounded-xl border border-zinc-800 overflow-x-auto">
-                {previewFields.length > 0 ? (
-                  <table className="w-full text-xs">
-                    <thead className="bg-zinc-950">
-                      <tr>
-                        {previewFields.map((field) => (
-                          <th key={field} className="text-left text-zinc-400 font-medium px-3 py-2 whitespace-nowrap">
-                            {FIELD_LABELS[field]}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {previewRows.map((row, index) => (
-                        <tr key={`preview-${index}`} className="border-t border-zinc-800">
-                          {previewFields.map((field) => (
-                            <td key={`preview-${index}-${field}`} className="px-3 py-2 text-zinc-300 max-w-[180px] truncate">
-                              {row[field] || '-'}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                ) : (
-                  <div className="px-3 py-3 text-xs text-zinc-500">
-                    All fields are currently ignored. Select at least one field to preview mapped values.
-                  </div>
-                )}
-              </div>
-            ) : null}
-
-            {importError ? (
-              <div className="rounded-xl border border-red-500/30 bg-red-500/10 text-red-300 px-3 py-2 text-sm">{importError}</div>
-            ) : null}
-
-            {importMessage ? (
-              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 px-3 py-2 text-sm">{importMessage}</div>
-            ) : null}
-
-            
-          </div>
-
-          
-          
-
-          <div className="flex flex-col items-start gap-3 p-4 bg-red-500/5 border border-red-500/20 rounded-xl sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h3 className="font-semibold text-red-400">Danger Zone</h3>
-              <p className="text-sm text-zinc-400 max-w-md">Delete your account and wipe all stored vault data permanently. This action cannot be undone.</p>
-            </div>
-            
-            <button 
-              onClick={() => {
-                setShowDeleteModal(true);
-                setDeletePassword('');
-                setDeleteConfirmText('');
-                setDeleteError(null);
-              }}
-              className="bg-red-500/10 hover:bg-red-500 hover:text-white border border-red-500/50 text-red-500 font-semibold py-2 px-4 rounded-xl inline-flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap"
+        {/* Content Area */}
+        <div className="flex-1 min-h-0">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeSection}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.15 }}
+              className="h-full"
             >
-              <Trash2 className="w-4 h-4" />
-              Delete Account
-            </button>
-          </div>
+              <div className="bg-zinc-900/50 border border-zinc-800 rounded-3xl p-6 lg:p-8 shadow-2xl shadow-black/40 h-full overflow-y-auto custom-scrollbar">
+                {activeSection === 'security' && (
+                  <div className="max-w-4xl space-y-10">
+                    <section>
+                      <h2 className="text-xl font-bold text-slate-100 mb-6 flex items-center gap-3">
+                        <Lock className="w-5 h-5 text-blue-400" /> 
+                        Security Controls
+                      </h2>
+                      
+                      <div className="grid grid-cols-1 gap-6">
+                        {/* 2FA Card */}
+                        <div className="bg-zinc-950/40 border border-zinc-800 rounded-2xl p-5 hover:border-zinc-700 transition-colors">
+                          <div className="flex items-start gap-4 mb-6">
+                            <div className="p-3 rounded-xl bg-blue-500/10 text-blue-400">
+                              <ShieldAlert className="w-6 h-6" />
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3">
+                                <h3 className="text-lg font-bold text-slate-200">Two-Factor Authentication</h3>
+                                {twoFAStatus === 'enabled' ? (
+                                  <span className="text-[10px] bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full flex items-center gap-1 font-medium">
+                                    <ShieldCheck className="w-2.5 h-2.5" /> Enabled
+                                  </span>
+                                ) : twoFAStatus === 'disabled' || twoFAStatus === 'setup' ? (
+                                  <span className="text-[10px] bg-zinc-500/15 text-zinc-400 border border-zinc-500/30 px-2 py-0.5 rounded-full flex items-center gap-1 font-medium">
+                                    <ShieldOff className="w-2.5 h-2.5" /> Disabled
+                                  </span>
+                                ) : (
+                                  <div className="flex items-center gap-1 text-[10px] text-zinc-500">
+                                    <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                  </div>
+                                )}
+                              </div>
+                              <p className="text-sm text-zinc-500 mt-1">Add an extra layer of security to your vault login.</p>
+                            </div>
+                          </div>
+                          <TwoFactorSetup />
+                        </div>
+
+                        {/* Passkeys Card */}
+                        <div className="bg-zinc-950/40 border border-zinc-800 rounded-2xl p-5 hover:border-zinc-700 transition-colors">
+                          <div className="flex items-start gap-4 mb-6">
+                            <div className="p-3 rounded-xl bg-violet-500/10 text-violet-400">
+                              <Fingerprint className="w-6 h-6" />
+                            </div>
+                            <div>
+                              <h3 className="text-lg font-bold text-slate-200">Biometric & Passkeys</h3>
+                              <p className="text-sm text-zinc-500 mt-1">Unlock your vault instantly using your device's biometric sensors.</p>
+                            </div>
+                          </div>
+                          <PasskeyManager />
+                        </div>
+
+                        {/* Master Password Change */}
+                        <div className="bg-zinc-950/40 border border-zinc-800 rounded-2xl p-6 hover:border-zinc-700 transition-colors">
+                          <div className="flex items-start gap-4 mb-6">
+                            <div className="p-3 rounded-xl bg-indigo-500/10 text-indigo-400">
+                              <RefreshCcw className="w-6 h-6" />
+                            </div>
+                            <div>
+                              <h3 className="text-lg font-bold text-slate-200">Change Master Password</h3>
+                              <p className="text-sm text-zinc-500 mt-1">Your data will be re-encrypted using the new password.</p>
+                            </div>
+                          </div>
+
+                          <form className="grid grid-cols-1 md:grid-cols-2 gap-4" onSubmit={handleChangeMasterPassword}>
+                            <div className="col-span-full">
+                              <label className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-1.5 block">Current Password</label>
+                              <input
+                                type="password"
+                                value={currentMasterPasswordInput}
+                                onChange={(event) => setCurrentMasterPasswordInput(event.target.value)}
+                                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-3 px-4 text-sm text-slate-200 outline-none focus:ring-2 focus:ring-blue-500 transition-all shadow-inner"
+                                placeholder="Enter current master password"
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-1.5 block">New Password</label>
+                              <input
+                                type="password"
+                                value={newMasterPasswordInput}
+                                onChange={(event) => setNewMasterPasswordInput(event.target.value)}
+                                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-3 px-4 text-sm text-slate-200 outline-none focus:ring-2 focus:ring-blue-500 transition-all shadow-inner"
+                                placeholder="At least 8 characters"
+                                minLength={8}
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-1.5 block">Confirm Password</label>
+                              <input
+                                type="password"
+                                value={confirmNewMasterPasswordInput}
+                                onChange={(event) => setConfirmNewMasterPasswordInput(event.target.value)}
+                                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-3 px-4 text-sm text-slate-200 outline-none focus:ring-2 focus:ring-blue-500 transition-all shadow-inner"
+                                placeholder="Repeat new password"
+                                minLength={8}
+                                required
+                              />
+                            </div>
+
+                            <AnimatePresence>
+                              {masterPasswordError && (
+                                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="col-span-full">
+                                  <div className="rounded-xl border border-red-500/20 bg-red-500/5 text-red-400 px-4 py-2.5 text-sm font-medium">
+                                    {masterPasswordError}
+                                  </div>
+                                </motion.div>
+                              )}
+                              {masterPasswordMessage && (
+                                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="col-span-full">
+                                  <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 text-emerald-400 px-4 py-2.5 text-sm font-medium">
+                                    {masterPasswordMessage}
+                                  </div>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+
+                            <div className="col-span-full flex justify-end pt-2">
+                              <button
+                                type="submit"
+                                disabled={loadingMasterPasswordChange}
+                                className="bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-bold py-3 px-6 rounded-xl inline-flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-lg shadow-blue-500/20"
+                              >
+                                {loadingMasterPasswordChange ? <RefreshCcw className="w-5 h-5 animate-spin" /> : <Shield className="w-5 h-5" />}
+                                {loadingMasterPasswordChange ? 'Updating Vault...' : 'Update Master Password'}
+                              </button>
+                            </div>
+                          </form>
+                        </div>
+                      </div>
+                    </section>
+                  </div>
+                )}
+
+                {activeSection === 'data' && (
+                  <div className="max-w-4xl space-y-8">
+                    <section>
+                      <h2 className="text-xl font-bold text-slate-100 mb-6 flex items-center gap-3">
+                        <Database className="w-5 h-5 text-emerald-400" /> 
+                        Data Management
+                      </h2>
+
+                      <div className="grid grid-cols-1 gap-6">
+                        {/* Export Card */}
+                        <div className="bg-zinc-950/40 border border-zinc-800 rounded-2xl p-6 hover:border-zinc-700 transition-colors flex flex-col sm:flex-row items-center justify-between gap-6">
+                          <div>
+                            <h3 className="text-lg font-bold text-slate-200">Export Vault</h3>
+                            <p className="text-sm text-zinc-500 mt-1 max-w-sm">Download your passwords as a decrypted CSV file for offline backup or migration.</p>
+                          </div>
+                          <button
+                            onClick={handleExportCsv}
+                            disabled={loadingCsvExport}
+                            className="w-full sm:w-auto bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-3 px-6 rounded-xl inline-flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg"
+                          >
+                            {loadingCsvExport ? <RefreshCcw className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
+                            {loadingCsvExport ? 'Preparing...' : 'Export CSV'}
+                          </button>
+                        </div>
+
+                        {/* Import Card */}
+                        <div className="bg-zinc-950/40 border border-zinc-800 rounded-2xl p-6 hover:border-zinc-700 transition-colors space-y-6">
+                          <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
+                            <div>
+                              <h3 className="text-lg font-bold text-white">Import from CSV</h3>
+                              <p className="text-sm text-zinc-500 mt-1 max-w-xl">
+                                Import credentials from other password managers. Your data will be encrypted before storage.
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-3 w-full sm:w-auto">
+                              <label className="flex-1 sm:flex-initial bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-3 px-6 rounded-xl inline-flex items-center justify-center gap-2 transition-all cursor-pointer whitespace-nowrap">
+                                <Upload className="w-5 h-5" />
+                                Select File
+                                <input type="file" accept=".csv,text/csv" className="hidden" onChange={handleCsvPicked} />
+                              </label>
+                              
+                              {csvRows.length > 0 && (
+                                <button
+                                  onClick={handleImportCsv}
+                                  disabled={loadingImport || !mappingReady}
+                                  className="flex-1 sm:flex-initial bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-6 rounded-xl inline-flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-lg shadow-emerald-500/20"
+                                >
+                                  {loadingImport ? <RefreshCcw className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
+                                  Confirm Import
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          {csvFileName && (
+                            <div className="flex items-center gap-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-3">
+                              <div className="p-2 rounded-lg bg-emerald-500/20 text-emerald-400">
+                                <FileText className="w-4 h-4" />
+                              </div>
+                              <div className="flex-1 text-sm font-medium text-emerald-100 truncate">
+                                {csvFileName}
+                              </div>
+                              <div className="text-xs font-bold text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded-md">
+                                {csvRows.length} ROWS
+                              </div>
+                              <button onClick={() => { setCsvRows([]); setCsvFileName(null); }} className="text-zinc-500 hover:text-red-400 p-1 cursor-pointer">
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          )}
+
+                          {csvHeaders.length > 0 && (
+                            <div className="space-y-6 animate-in fade-in slide-in-from-top-4 duration-300">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {(Object.keys(FIELD_LABELS) as ImportTargetField[]).map((field) => (
+                                  <div key={field} className="space-y-1.5">
+                                    <label className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">{FIELD_LABELS[field]}</label>
+                                    <select
+                                      value={mapping[field] ?? '__ignore__'}
+                                      onChange={(event) => handleMappingChange(field, event.target.value)}
+                                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2.5 px-4 text-sm text-slate-200 outline-none focus:ring-2 focus:ring-emerald-500 transition-all font-medium"
+                                    >
+                                      <option value="__ignore__">── Ignored ──</option>
+                                      {csvHeaders.map((header) => (
+                                        <option key={`${field}-${header}`} value={header}>
+                                          {header}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                ))}
+                              </div>
+
+                              <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 overflow-hidden shadow-inner">
+                                <div className="px-4 py-2 border-b border-zinc-800 bg-zinc-900/50 flex items-center justify-between">
+                                  <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Data Preview</span>
+                                  <span className="text-[10px] text-zinc-600">First 3 rows</span>
+                                </div>
+                                <div className="overflow-x-auto">
+                                  {previewFields.length > 0 ? (
+                                    <table className="w-full text-xs">
+                                      <thead>
+                                        <tr className="bg-zinc-900/30">
+                                          {previewFields.map((field) => (
+                                            <th key={field} className="text-left text-zinc-400 font-bold px-4 py-2.5 whitespace-nowrap">
+                                              {FIELD_LABELS[field]}
+                                            </th>
+                                          ))}
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {previewRows.map((row, index) => (
+                                          <tr key={`preview-${index}`} className="border-t border-zinc-900/80">
+                                            {previewFields.map((field) => (
+                                              <td key={`preview-${index}-${field}`} className="px-4 py-2.5 text-zinc-300 max-w-[180px] truncate">
+                                                {row[field] || '—'}
+                                              </td>
+                                            ))}
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  ) : (
+                                    <div className="px-5 py-6 text-sm text-zinc-600 text-center italic">
+                                      Map at least one field to see a preview of your data.
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          <AnimatePresence>
+                            {importError && (
+                              <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="rounded-xl border border-red-500/20 bg-red-500/5 text-red-400 px-4 py-3 text-sm font-medium">
+                                {importError}
+                              </motion.div>
+                            )}
+                            {importMessage && (
+                              <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 text-emerald-100 px-4 py-3 text-sm font-medium">
+                                {importMessage}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      </div>
+                    </section>
+                  </div>
+                )}
+
+                {activeSection === 'account' && (
+                  <div className="max-w-4xl space-y-8">
+                    <section>
+                      <h2 className="text-xl font-bold text-slate-100 mb-6 flex items-center gap-3">
+                        <User className="w-5 h-5 text-indigo-400" /> 
+                        Account Preferences
+                      </h2>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                        <div className="bg-zinc-950/40 border border-zinc-800 rounded-2xl p-5">
+                          <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block mb-2">Registered Email</label>
+                          <div className="text-slate-200 font-medium break-all">{user?.email}</div>
+                        </div>
+                        <div className="bg-zinc-950/40 border border-zinc-800 rounded-2xl p-5">
+                          <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block mb-2">Session Identifier</label>
+                          <div className="text-zinc-500 font-mono text-xs truncate" title={user?.uid}>{user?.uid}</div>
+                        </div>
+                      </div>
+
+                      <div className="bg-red-500/5 border border-red-500/20 rounded-3xl p-8 space-y-6 transition-all hover:bg-red-500/[0.07]">
+                        <div className="flex flex-col sm:flex-row items-start justify-between gap-6">
+                          <div className="flex items-start gap-4">
+                            <div className="p-3 rounded-2xl bg-red-400/20 text-red-400">
+                              <AlertTriangle className="w-8 h-8" />
+                            </div>
+                            <div>
+                              <h3 className="text-xl font-bold text-slate-100">Danger Zone</h3>
+                              <p className="text-zinc-400 text-sm mt-1 max-w-lg leading-relaxed">
+                                Deleting your account will permanently wipe your entire vault. 
+                                This data is end-to-end encrypted; once deleted, it cannot be recovered by us or anyone else.
+                              </p>
+                            </div>
+                          </div>
+                          
+                          <button 
+                            onClick={() => {
+                              setShowDeleteModal(true);
+                              setDeletePassword('');
+                              setDeleteConfirmText('');
+                              setDeleteError(null);
+                            }}
+                            className="w-full sm:w-auto bg-red-600 hover:bg-red-500 text-white font-bold py-3.5 px-8 rounded-xl inline-flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-red-500/20 active:scale-95 whitespace-nowrap"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                            Purge Everything
+                          </button>
+                        </div>
+
+                        <div className="p-5 rounded-2xl bg-red-500/10 border border-red-500/10 backdrop-blur-sm">
+                          <ul className="text-xs text-red-400/80 space-y-2 list-disc list-inside font-medium">
+                            <li>All vault credentials will be purged from our servers.</li>
+                            <li>Your master record will be destroyed.</li>
+                            <li>You will be immediately logged out.</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </section>
+                  </div>
+                )}
+
+                {activeSection === 'app' && (
+                  <div className="max-w-4xl">
+                    <section>
+                      <h2 className="text-xl font-bold text-slate-100 mb-6 flex items-center gap-3">
+                        <Smartphone className="w-5 h-5 text-amber-400" /> 
+                        Native Experience
+                      </h2>
+
+                      <div className="bg-zinc-950/40 border border-zinc-800 rounded-3xl p-8 flex flex-col items-center text-center space-y-6">
+                        <div className="w-24 h-24 rounded-3xl bg-amber-500/10 flex items-center justify-center text-amber-500 shadow-xl shadow-amber-500/10">
+                          <Smartphone className="w-12 h-12" />
+                        </div>
+                        
+                        <div className="space-y-2 max-w-lg">
+                          <h3 className="text-2xl font-bold text-slate-100">Mero Passwords for Desktop</h3>
+                          <p className="text-zinc-400">
+                            Install as a Progressive Web App to enjoy a full-screen experience, standalone window, and offline vault access.
+                          </p>
+                        </div>
+
+                        <div className="w-full max-w-md p-4 rounded-2xl bg-zinc-900/50 border border-zinc-800 text-left">
+                          <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3">Native Features</h4>
+                          <div className="grid grid-cols-2 gap-3 text-xs text-zinc-400">
+                            <div className="flex items-center gap-2 text-emerald-400"><Shield className="w-3.5 h-3.5" /> No URL Bar</div>
+                            <div className="flex items-center gap-2 text-emerald-400"><RefreshCcw className="w-3.5 h-3.5" /> Background Sync</div>
+                            <div className="flex items-center gap-2 text-emerald-400"><Lock className="w-3.5 h-3.5" /> Secure Keyring</div>
+                            <div className="flex items-center gap-2 text-emerald-400"><LayoutDashboard className="w-3.5 h-3.5" /> Taskbar Icon</div>
+                          </div>
+                        </div>
+
+                        {!isInstalled && canInstall && (
+                          <button
+                            onClick={handleInstallApp}
+                            disabled={isInstallFlowRunning}
+                            className="bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold py-4 px-10 rounded-2xl inline-flex items-center gap-3 transition-all cursor-pointer shadow-lg shadow-amber-500/20 active:scale-95"
+                          >
+                            {isInstallFlowRunning ? <RefreshCcw className="w-5 h-5 animate-spin" /> : <Smartphone className="w-5 h-5" />}
+                            {isInstallFlowRunning ? 'Initializing...' : 'Install Native App'}
+                          </button>
+                        )}
+
+                        {(isInstalled || !canInstall) && (
+                          <div className="px-6 py-3 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold text-sm flex items-center gap-2">
+                            <Shield className="w-4 h-4" /> App is already in your library
+                          </div>
+                        )}
+                      </div>
+                    </section>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </AnimatePresence>
         </div>
       </div>
 

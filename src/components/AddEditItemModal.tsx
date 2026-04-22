@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import { VaultItem } from '@/types/vault';
 import { generatePassword } from '@/lib/passwordGen';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, RefreshCcw, Save, Loader2, Link2, KeyRound, Type, AlignLeft } from 'lucide-react';
+import { X, RefreshCcw, Save, Loader2, Link2, KeyRound, Type, AlignLeft, Globe } from 'lucide-react';
+import Favicon from './Favicon';
 
 interface AddEditItemModalProps {
   isOpen: boolean;
@@ -126,13 +127,24 @@ export default function AddEditItemModal({ isOpen, onClose, onSave, initialData 
                   <label className="block text-sm font-medium text-zinc-400 mb-1 flex items-center gap-2">
                     <Link2 className="w-4 h-4" /> URL (Optional)
                   </label>
-                  <input 
-                    type="url" 
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    placeholder="https://..."
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-3 px-4 text-sm focus:ring-2 focus:ring-amber-500 text-slate-200 outline-none"
-                  />
+                  <div className="relative group">
+                    <div className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none transition-all group-focus-within:scale-110">
+                      <div className="w-6 h-6 rounded-lg overflow-hidden border border-zinc-800 bg-zinc-900 flex items-center justify-center shadow-sm">
+                        {url.trim() ? (
+                          <Favicon url={url} alt={siteName || 'Site Preview'} />
+                        ) : (
+                          <Globe className="w-3.5 h-3.5 text-zinc-600" />
+                        )}
+                      </div>
+                    </div>
+                    <input 
+                      type="url" 
+                      value={url}
+                      onChange={(e) => setUrl(e.target.value)}
+                      placeholder="https://..."
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-3 pl-12 pr-4 text-sm focus:ring-2 focus:ring-amber-500 text-slate-200 outline-none transition-all focus:border-amber-500/50"
+                    />
+                  </div>
                 </div>
 
                 <div>

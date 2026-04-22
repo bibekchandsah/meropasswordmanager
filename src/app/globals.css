@@ -118,7 +118,7 @@ html[data-theme='light'] .bg-black\/60 {
 
 html[data-theme='light'] .border-zinc-800,
 html[data-theme='light'] .border-zinc-700 {
-  border-color: var(--border-color) !important;
+  border-color: var(--border-color);
 }
 
 html[data-theme='light'] div.border-b-red-500 {
@@ -197,3 +197,14 @@ html[data-theme='light'] .dropdown-item-danger:hover {
   background-color: rgba(239, 68, 68, 0.1) !important;
   color: #dc2626 !important; /* red-600 */
 }
+
+/* ── Strength Indicator Overrides (Force visibility in Light Mode) ── */
+.strength-indicator {
+  /* Default behaviors are already in JS, but light mode needs forced overrides */
+}
+
+html[data-theme='light'] .strength-indicator {
+  border-bottom-color: var(--strength-color) !important;
+  border-left-color: var(--strength-color) !important;
+}
+

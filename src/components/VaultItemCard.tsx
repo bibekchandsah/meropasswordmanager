@@ -45,6 +45,10 @@ export default function VaultItemCard({ item, onEdit, onDelete, onToggleFavorite
     try { return new URL(withProtocol).toString(); } catch { return null; }
   })();
 
+  const capitalizedSiteName = item.siteName 
+    ? item.siteName.charAt(0).toUpperCase() + item.siteName.slice(1) 
+    : "";
+
   useEffect(() => {
     setIsTouchDevice(window.matchMedia('(pointer: coarse)').matches);
     const handler = (e: PointerEvent) => setIsTouchDevice(e.pointerType === 'touch');
@@ -72,10 +76,10 @@ export default function VaultItemCard({ item, onEdit, onDelete, onToggleFavorite
       exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.15 } }}
       style={
         viewMode === 'grid'
-          ? { borderBottomColor: strength.bottomColor, borderBottomWidth: '3px' }
-          : { borderLeftColor: strength.bottomColor, borderLeftWidth: '3px' }
+          ? { borderBottomColor: strength.bottomColor, borderBottomWidth: '4px', '--strength-color': strength.bottomColor } as any
+          : { borderLeftColor: strength.bottomColor, borderLeftWidth: '4px', '--strength-color': strength.bottomColor } as any
       }
-      className={`group relative transition-all duration-200 border border-zinc-800 bg-zinc-900 shadow-sm hover:border-zinc-700 hover:shadow-lg hover:shadow-black/20 ${
+      className={`group relative transition-all duration-200 border border-zinc-800 bg-zinc-900 shadow-sm hover:border-zinc-700 hover:shadow-lg hover:shadow-black/20 strength-indicator ${
         showMenu ? "z-50" : "z-0"
       } ${
         viewMode === 'grid' 
@@ -107,15 +111,15 @@ export default function VaultItemCard({ item, onEdit, onDelete, onToggleFavorite
                   target="_blank"
                   rel="noopener noreferrer"
                   className="group/link flex items-center gap-1"
-                  title={`Open ${item.siteName}`}
+                  title={`Open ${capitalizedSiteName}`}
                 >
                   <span className={`font-semibold text-slate-100 truncate group-hover/link:text-emerald-400 transition-colors ${viewMode === 'grid' ? "max-w-[160px] text-sm" : "max-w-[120px] sm:max-w-[160px] md:max-w-[200px] text-xs"}`}>
-                    {item.siteName}
+                    {capitalizedSiteName}
                   </span>
                   <ExternalLink className="w-3 h-3 text-zinc-600 group-hover/link:text-emerald-400 transition-colors flex-shrink-0" />
                 </a>
               ) : (
-                <p className={`font-semibold text-slate-100 truncate ${viewMode === 'grid' ? "max-w-[160px] text-sm" : "max-w-[120px] sm:max-w-[160px] md:max-w-[200px] text-xs"}`}>{item.siteName}</p>
+                <p className={`font-semibold text-slate-100 truncate ${viewMode === 'grid' ? "max-w-[160px] text-sm" : "max-w-[120px] sm:max-w-[160px] md:max-w-[200px] text-xs"}`}>{capitalizedSiteName}</p>
               )}
               <p className={`text-zinc-500 truncate transition-all ${viewMode === 'grid' ? "text-xs mt-0.5 max-w-[160px]" : "text-[10px] sm:text-[11px] max-w-[100px] sm:max-w-[120px]"}`}>
                 {viewMode === 'list' && <span className="hidden sm:inline text-zinc-700 mr-1.5">•</span>}

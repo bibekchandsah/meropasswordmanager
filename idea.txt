@@ -428,6 +428,36 @@ PasskeyManager shows an account password input field the first time you click "S
 Google users skip the account password field entirely (their session is handled via OAuth)
 Existing passkeys without encryptedAccountPassword fall back to the refresh token path gracefully
 
+TOTP secret generated client-side, stored encrypted in Firestore at users/{uid}/2fa/totp (encrypted with the master key — zero-knowledge)
+enabled flag stored in Firestore (unencrypted, just a boolean)
+After successful login/passkey auth → if 2FA enabled → show TOTP modal before granting access
+Recovery: if user can't access TOTP app → send a 6-digit OTP to email via Resend → verify it server-side (stored temporarily in Firestore with expiry)
+Settings: enable/disable with QR code setup flow
+
+the full recovery flow now does:
+
+User clicks "Email Recovery" tab → enters email + account password → clicks "Send Code"
+Server verifies credentials, generates OTP, stores SHA-256(otp) in Firestore, emails the code
+User enters the 6-digit code → server verifies it, then deletes both emailOtp and totp documents
+The challenge modal shows: "Your old authenticator has been unlinked — please set up a new one in Settings" for 2.2 seconds, then proceeds to the dashboard
+On next login, 2FA is no longer enabled (TOTP record is gone), so they go straight in — then they can re-enable 2FA from Settings with a fresh QR code
+
+Remove Passkey now requires the vault to be unlocked — same gate as Set Up Passkey. The amber "vault is locked" warning already shows in that section, so the user gets clear feedback on why the button is disabled.
+
+when the vault is locked, status stays 'disabled' and the component renders the normal locked warning instead of the spinner. The setStatus('loading') only fires right before the actual Firestore fetch, so the spinner only shows when there's real async work happening.
+
+useAutoLock.ts
+    Listens to mousemove, mousedown, keydown, touchstart, scroll, click, focus on window
+    Any of those events resets a 15-minute setTimeout
+    When the timer fires → setMasterKey(null) + setMasterPassword(null) — the vault locks
+    When the vault is already locked, all listeners are removed and no timer runs (zero overhead)
+    When the user unlocks again, the effect re-runs and a fresh 15-minute timer starts
+What happens to the user:
+    They stay signed into Firebase — no re-login needed
+    The dashboard shows the "Vault locked" screen asking for their master password
+    They enter it, PBKDF2 re-derives the key, vault unlocks as normal
+    If 2FA is enabled, they are not re-challenged (they're already authenticated with Firebase — only the vault key is cleared)
+
 
 use firebase and supabase for database and authentication
 allow user to login from google/manually email

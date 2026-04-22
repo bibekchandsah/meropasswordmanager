@@ -322,7 +322,8 @@ export default function Dashboard() {
     if (score <= 1) return 'border-b-red-500';
     if (score === 2) return 'border-b-yellow-400';
     if (score === 3) return 'border-b-blue-500';
-    return 'border-b-green-500';
+    if (score === 4) return 'border-b-emerald-500';
+    return 'border-b-emerald-400';
   };
 
   const getNormalizedUrl = (value?: string): string | null => {
@@ -341,26 +342,23 @@ export default function Dashboard() {
   const strengthStats = items.reduce(
     (acc, item) => {
       const score = getPasswordStrengthScore(item.password || '');
-      if (score >= 4) {
-        acc.strongest += 1;
-      } else if (score === 3) {
-        acc.medium += 1;
-      } else if (score === 2) {
-        acc.normal += 1;
-      } else {
-        acc.weak += 1;
-      }
+      if (score === 5)      acc.excellent += 1;
+      else if (score === 4) acc.strong += 1;
+      else if (score === 3) acc.good += 1;
+      else if (score === 2) acc.fair += 1;
+      else                  acc.weak += 1;
       acc.scoreTotal += score;
       return acc;
     },
-    { strongest: 0, medium: 0, normal: 0, weak: 0, scoreTotal: 0 }
+    { excellent: 0, strong: 0, good: 0, fair: 0, weak: 0, scoreTotal: 0 }
   );
 
   const strengthData = [
-    { key: 'Strongest', count: strengthStats.strongest, colorClass: 'bg-emerald-500', colorHex: '#10b981' },
-    { key: 'Medium', count: strengthStats.medium, colorClass: 'bg-blue-500', colorHex: '#3b82f6' },
-    { key: 'Normal', count: strengthStats.normal, colorClass: 'bg-yellow-400', colorHex: '#facc15' },
-    { key: 'Weak', count: strengthStats.weak, colorClass: 'bg-red-500', colorHex: '#ef4444' }
+    { key: 'Excellent', count: strengthStats.excellent, colorClass: 'bg-emerald-400', colorHex: '#34d399' },
+    { key: 'Strong',    count: strengthStats.strong,    colorClass: 'bg-emerald-500', colorHex: '#10b981' },
+    { key: 'Good',      count: strengthStats.good,      colorClass: 'bg-blue-500',    colorHex: '#3b82f6' },
+    { key: 'Fair',      count: strengthStats.fair,      colorClass: 'bg-yellow-400',  colorHex: '#facc15' },
+    { key: 'Weak',      count: strengthStats.weak,      colorClass: 'bg-red-500',     colorHex: '#ef4444' },
   ];
 
   const strengthWithPercentages = strengthData.map((item) => ({
@@ -453,325 +451,269 @@ export default function Dashboard() {
   const isSearching = search.trim().length > 0;
 
   return (
-    <div className="flex flex-col h-full gap-6">
+    <div className="flex flex-col h-full gap-5">
+      {/* ── Page header ─────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-emerald-400 to-indigo-400 bg-clip-text text-transparent">Mero Password Manager</h1>
-          <p className="text-zinc-400 text-sm mt-1">End-to-End Encrypted Client-side Storage</p>
+          <h1 className="text-3xl font-bold text-slate-100 tracking-tight bg-gradient-to-r from-emerald-400 to-indigo-400 bg-clip-text text-transparent">Mero Password Manager</h1>
+          <p className="text-zinc-500 text-sm mt-0.5">
+            {totalPasswords} {totalPasswords === 1 ? 'credential' : 'credentials'} · End-to-End Encrypted . Client-side Storage
+          </p>
         </div>
 
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowDashboardContainers((prev) => !prev)}
-            className="h-10 w-10 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-slate-100 transition-colors flex items-center justify-center cursor-pointer"
-            title={showDashboardContainers ? 'Hide dashboard containers' : 'Show dashboard containers'}
-            aria-label={showDashboardContainers ? 'Hide dashboard containers' : 'Show dashboard containers'}
+            className="h-9 w-9 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300 transition-colors flex items-center justify-center cursor-pointer"
+            title={showDashboardContainers ? 'Hide analytics' : 'Show analytics'}
           >
-            {showDashboardContainers ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+            {showDashboardContainers ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
           </button>
 
           <button
             onClick={() => { setEditingItem(null); setIsModalOpen(true); }}
-            className="bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-semibold py-2 px-4 rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-emerald-500/20 cursor-pointer"
+            className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-semibold py-2 px-4 rounded-xl transition-all shadow-lg shadow-emerald-500/20 cursor-pointer text-sm"
           >
-            <Plus className="w-5 h-5" />
+            <Plus className="w-4 h-4" />
             Add Password
           </button>
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+      {/* ── Search + Sort ────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row gap-2.5">
         <div className="relative flex-1">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
-          <input 
-            type="text" 
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
+          <input
+            type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search vault..."
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-4 pl-12 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all font-medium text-slate-200"
+            placeholder="Search by site, username or URL…"
+            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2.5 pl-10 pr-4 text-sm text-slate-200 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all"
           />
         </div>
 
         <div className="relative">
-          <button 
+          <button
             onClick={() => setShowSortMenu(!showSortMenu)}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 bg-zinc-900 border border-zinc-800 rounded-xl py-4 sm:py-2.5 px-4 text-sm font-medium text-slate-200 hover:bg-zinc-800 transition-colors cursor-pointer"
+            className="w-full sm:w-auto flex items-center justify-between gap-2 bg-zinc-900 border border-zinc-800 rounded-xl py-2.5 px-4 text-sm font-medium text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition-colors cursor-pointer min-w-[160px]"
           >
-            <span>
-              {sortBy === 'none' && `Default (${sortOrder === 'asc' ? 'A-Z' : 'Z-A'})`}
-              {sortBy === 'favorite' && `Favorite (${sortOrder === 'asc' ? 'A-Z' : 'Z-A'})`}
-              {sortBy === 'strongest' && `Strongest (${sortOrder === 'asc' ? 'A-Z' : 'Z-A'})`}
-              {sortBy === 'medium' && `Medium (${sortOrder === 'asc' ? 'A-Z' : 'Z-A'})`}
-              {sortBy === 'normal' && `Normal (${sortOrder === 'asc' ? 'A-Z' : 'Z-A'})`}
-              {sortBy === 'weak' && `Weak (${sortOrder === 'asc' ? 'A-Z' : 'Z-A'})`}
+            <span className="truncate">
+              {sortBy === 'none'     && `Default (${sortOrder === 'asc' ? 'A–Z' : 'Z–A'})`}
+              {sortBy === 'favorite' && `Favorites`}
+              {sortBy === 'strongest'&& `Strongest`}
+              {sortBy === 'medium'   && `Medium`}
+              {sortBy === 'normal'   && `Normal`}
+              {sortBy === 'weak'     && `Weak`}
             </span>
-            <ChevronDown className={`w-4 h-4 transition-transform ${showSortMenu ? 'rotate-180' : ''}`} />
+            <ChevronDown className={`w-4 h-4 flex-shrink-0 transition-transform ${showSortMenu ? 'rotate-180' : ''}`} />
           </button>
 
           {showSortMenu && (
             <>
-              <div 
-                className="fixed inset-0 z-40"
-                onClick={() => setShowSortMenu(false)}
-              />
-              <div className="absolute right-0 top-full mt-2 w-56 bg-zinc-800 rounded-xl shadow-xl z-50 border border-zinc-700 overflow-hidden">
-                <div className="grid grid-cols-2 gap-2 p-2 border-b border-zinc-700 bg-zinc-900/60">
-                  <button
-                    onClick={() => setSortOrder('asc')}
-                    className={`rounded-lg px-2 py-1.5 text-xs font-medium transition-colors cursor-pointer ${sortOrder === 'asc' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}`}
-                  >
-                    Asc (A-Z)
-                  </button>
-                  <button
-                    onClick={() => setSortOrder('desc')}
-                    className={`rounded-lg px-2 py-1.5 text-xs font-medium transition-colors cursor-pointer ${sortOrder === 'desc' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}`}
-                  >
-                    Desc (Z-A)
-                  </button>
+              <div className="fixed inset-0 z-40" onClick={() => setShowSortMenu(false)} />
+              <div className="absolute right-0 top-full mt-1.5 w-52 bg-zinc-950 rounded-xl shadow-2xl z-50 border border-zinc-800 overflow-hidden">
+                <div className="grid grid-cols-2 gap-1.5 p-2 border-b border-zinc-800">
+                {(['asc', 'desc'] as const).map((o) => (
+                    <button
+                      key={o}
+                      onClick={() => setSortOrder(o)}
+                      className={`dropdown-item rounded-lg px-2 py-1.5 text-xs font-medium transition-colors cursor-pointer hover:bg-zinc-800 hover:text-zinc-100 ${
+                        sortOrder === o ? '!bg-emerald-500/20 !text-emerald-300' : 'text-zinc-400'
+                      }`}
+                    >
+                      {o === 'asc' ? 'A → Z' : 'Z → A'}
+                    </button>
+                  ))}
                 </div>
-                <button
-                  onClick={() => {
-                    setSortBy('none');
-                    setShowSortMenu(false);
-                  }}
-                  className={`w-full text-left px-4 py-2.5 text-sm transition-colors cursor-pointer ${sortBy === 'none' ? 'bg-emerald-500/10 text-emerald-400 font-medium' : 'text-zinc-300 hover:bg-zinc-700'}`}
-                >
-                  Default
-                </button>
-                <div className="h-px bg-zinc-700" />
-                <button
-                  onClick={() => {
-                    setSortBy('favorite');
-                    setShowSortMenu(false);
-                  }}
-                  className={`w-full text-left px-4 py-2.5 text-sm transition-colors cursor-pointer ${sortBy === 'favorite' ? 'bg-emerald-500/10 text-emerald-400 font-medium' : 'text-zinc-300 hover:bg-zinc-700'}`}
-                >
-                  Favorite
-                </button>
-                <div className="h-px bg-zinc-700" />
-                <button
-                  onClick={() => {
-                    setSortBy('strongest');
-                    setShowSortMenu(false);
-                  }}
-                  className={`w-full text-left px-4 py-2.5 text-sm transition-colors cursor-pointer ${sortBy === 'strongest' ? 'bg-emerald-500/10 text-emerald-400 font-medium' : 'text-zinc-300 hover:bg-zinc-700'}`}
-                >
-                  Strongest
-                </button>
-                <div className="h-px bg-zinc-700" />
-                <button
-                  onClick={() => {
-                    setSortBy('medium');
-                    setShowSortMenu(false);
-                  }}
-                  className={`w-full text-left px-4 py-2.5 text-sm transition-colors cursor-pointer ${sortBy === 'medium' ? 'bg-emerald-500/10 text-emerald-400 font-medium' : 'text-zinc-300 hover:bg-zinc-700'}`}
-                >
-                  Medium
-                </button>
-                <div className="h-px bg-zinc-700" />
-                <button
-                  onClick={() => {
-                    setSortBy('normal');
-                    setShowSortMenu(false);
-                  }}
-                  className={`w-full text-left px-4 py-2.5 text-sm transition-colors cursor-pointer ${sortBy === 'normal' ? 'bg-emerald-500/10 text-emerald-400 font-medium' : 'text-zinc-300 hover:bg-zinc-700'}`}
-                >
-                  Normal
-                </button>
-                <div className="h-px bg-zinc-700" />
-                <button
-                  onClick={() => {
-                    setSortBy('weak');
-                    setShowSortMenu(false);
-                  }}
-                  className={`w-full text-left px-4 py-2.5 text-sm transition-colors cursor-pointer ${sortBy === 'weak' ? 'bg-emerald-500/10 text-emerald-400 font-medium' : 'text-zinc-300 hover:bg-zinc-700'}`}
-                >
-                  Weak
-                </button>
+                {(['none', 'favorite', 'strongest', 'medium', 'normal', 'weak'] as const).map((opt, i, arr) => (
+                  <div key={opt}>
+                    <button
+                      onClick={() => { setSortBy(opt); setShowSortMenu(false); }}
+                      className={`dropdown-item w-full text-left px-4 py-2.5 text-sm transition-colors cursor-pointer capitalize hover:bg-zinc-800 hover:text-zinc-100 ${
+                        sortBy === opt ? '!bg-emerald-500/10 !text-emerald-400 font-medium' : 'text-zinc-400'
+                      }`}
+                    >
+                      {opt === 'none' ? 'Default' : opt.charAt(0).toUpperCase() + opt.slice(1)}
+                    </button>
+                    {i < arr.length - 1 && <div className="h-px bg-zinc-800" />}
+                  </div>
+                ))}
               </div>
             </>
           )}
         </div>
       </div>
 
+      {/* ── Analytics (collapsible) ──────────────────────────────────── */}
       <AnimatePresence initial={false}>
         {showDashboardContainers && !isSearching ? (
           <motion.div
-            key="dashboard-analytics"
-            initial={{ opacity: 0, y: -10, height: 0 }}
-            animate={{ opacity: 1, y: 0, height: 'auto' }}
-            exit={{ opacity: 0, y: -10, height: 0 }}
-            transition={{ duration: 0.22, ease: 'easeInOut' }}
+            key="analytics"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2, ease: 'easeInOut' }}
             className="space-y-4"
           >
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
-                <p className="text-xs uppercase tracking-widest text-zinc-500">Total Passwords</p>
-                <p className="mt-2 text-3xl font-bold text-slate-100">{totalPasswords}</p>
-                <p className="mt-2 text-xs text-zinc-400">All saved credentials in your encrypted vault.</p>
+            {/* Stat cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
+                <p className="text-xs font-medium text-zinc-500 uppercase tracking-widest">Total Passwords</p>
+                <p className="mt-2 text-3xl font-bold text-slate-100 tabular-nums">{totalPasswords}</p>
+                <p className="mt-1 text-xs text-zinc-600">Encrypted credentials in vault</p>
               </div>
 
-              <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
-                <p className="text-xs uppercase tracking-widest text-zinc-500">Security Health</p>
-                <p className="mt-2 text-3xl font-bold text-emerald-400">{securityHealth}%</p>
-                <p className="mt-2 text-xs text-zinc-400">Calculated from average password strength across all entries.</p>
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
+                <p className="text-xs font-medium text-zinc-500 uppercase tracking-widest">Security Health</p>
+                <div className="mt-2 flex items-end gap-2">
+                  <p className={`text-3xl font-bold tabular-nums ${securityHealth >= 70 ? 'text-emerald-400' : securityHealth >= 40 ? 'text-yellow-400' : 'text-red-400'}`}>
+                    {securityHealth}%
+                  </p>
+                </div>
+                <div className="mt-2 h-1.5 w-full rounded-full bg-zinc-800 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${securityHealth >= 70 ? 'bg-emerald-500' : securityHealth >= 40 ? 'bg-yellow-400' : 'bg-red-500'}`}
+                    style={{ width: `${securityHealth}%` }}
+                  />
+                </div>
               </div>
 
-              <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
-                <p className="text-xs uppercase tracking-widest text-zinc-500">Needs Attention</p>
-                <p className="mt-2 text-3xl font-bold text-red-400">{strengthStats.weak}</p>
-                <p className="mt-2 text-xs text-zinc-400">Weak passwords should be rotated first.</p>
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
+                <p className="text-xs font-medium text-zinc-500 uppercase tracking-widest">Needs Attention</p>
+                <p className={`mt-2 text-3xl font-bold tabular-nums ${strengthStats.weak > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                  {strengthStats.weak}
+                </p>
+                <p className="mt-1 text-xs text-zinc-600">Weak passwords to rotate</p>
               </div>
             </div>
 
-            <div className="space-y-4">
-              <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
-                <h2 className="text-lg font-semibold text-slate-100">Password Strength Distribution</h2>
-                <p className="mt-1 text-sm text-zinc-400">Visual breakdown of strongest, medium, normal, and weak passwords.</p>
+            {/* Strength + Recents row */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-stretch">
+              {/* Strength distribution */}
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 flex flex-col">
+                <p className="text-sm font-semibold text-slate-100 mb-4">Strength Distribution</p>
 
-                <div className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-2">
-                  <div className="space-y-6">
-                    {strengthWithPercentages.map((item) => {
+                <div className="flex-1 flex flex-col gap-4 min-h-0">
+                  {/* Doughnut — grows to fill available space, capped so it doesn't get huge */}
+                  <div className="flex justify-center items-center flex-1 min-h-0">
+                    <div
+                      className="relative rounded-full w-full"
+                      style={{
+                        background: doughnutGradient,
+                        aspectRatio: '1 / 1',
+                        maxWidth: '160px',
+                        maxHeight: '160px',
+                      }}
+                    >
+                      <div className="absolute inset-[18%] flex items-center justify-center rounded-full bg-zinc-900">
+                        <div className="text-center">
+                          <p className="text-[10px] text-zinc-600">Total</p>
+                          <p className="text-xl font-bold text-slate-100 tabular-nums">{totalPasswords}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Bars — always at the bottom, spread evenly */}
+                  <div className="flex flex-col justify-between gap-2">
+                    {strengthWithPercentages.map((s) => (
+                      <div key={s.key}>
+                        <div className="flex justify-between text-xs text-zinc-400 mb-1">
+                          <span>{s.key}</span>
+                          <span className="tabular-nums">{s.count}</span>
+                        </div>
+                        <div className="h-1.5 w-full rounded-full bg-zinc-800 overflow-hidden">
+                          <div className={`h-full rounded-full ${s.colorClass}`} style={{ width: `${s.percentage}%` }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Recent passwords */}
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 flex flex-col">
+                <p className="text-sm font-semibold text-slate-100 mb-4">Recently Updated</p>
+
+                {recentItems.length === 0 ? (
+                  <p className="text-sm text-zinc-600">No passwords yet.</p>
+                ) : (
+                  <div className="flex flex-col gap-2 flex-1 flex-start">
+                    {recentItems.map((item) => {
+                      const normalizedUrl = getNormalizedUrl(item.url);
+                      const strengthBorder = getPasswordStrengthBorder(item.password || '');
                       return (
-                        <div key={item.key}>
-                          <div className="mb-1 flex items-center justify-between text-sm text-zinc-300">
-                            <span>{item.key}</span>
-                            <span>{item.count} ({item.percentage}%)</span>
+                        <div key={item.id} className="flex items-center gap-3 rounded-xl bg-zinc-950/60 border border-zinc-800 px-3 py-2">
+                          <div className="h-7 w-7 rounded-lg bg-zinc-800 border border-zinc-700 overflow-hidden flex-shrink-0">
+                            <Favicon url={item.url} alt={item.siteName} />
                           </div>
-                          <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-800">
-                            <div
-                              className={`h-full transition-all duration-300 ${item.colorClass}`}
-                              style={{ width: `${item.percentage}%` }}
-                            />
+                          <div className="flex-1 min-w-0">
+                            {normalizedUrl ? (
+                              <a href={normalizedUrl} target="_blank" rel="noopener noreferrer"
+                                className="text-xs font-medium text-slate-200 hover:text-emerald-400 transition-colors truncate block">
+                                {item.siteName}
+                              </a>
+                            ) : (
+                              <p className="text-xs font-medium text-slate-200 truncate">{item.siteName}</p>
+                            )}
+                            <div className={`mt-1 rounded bg-zinc-900 border border-zinc-800 border-b-2 ${strengthBorder} px-2 py-0.5 font-mono text-[10px] text-zinc-400`}>
+                              {recentVisiblePasswords[item.id] ? (item.password || '—') : '••••••••••'}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-0.5 flex-shrink-0">
+                            <button onClick={() => handleRecentTogglePassword(item.id)}
+                              className="p-1 text-zinc-600 hover:text-zinc-300 transition-colors cursor-pointer rounded">
+                              {recentVisiblePasswords[item.id] ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                            </button>
+                            <button onClick={() => void handleRecentCopyPassword(item.id, item.password)}
+                              className="p-1 text-zinc-600 hover:text-zinc-300 transition-colors cursor-pointer rounded">
+                              {recentCopiedPasswords[item.id] ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                            </button>
                           </div>
                         </div>
                       );
                     })}
                   </div>
-
-                  <div className="flex items-center justify-center gap-8 rounded-xl border border-zinc-800 bg-zinc-950/60 p-6 lg:gap-10">
-                    <div
-                      className="relative h-40 w-40 rounded-full"
-                      style={{ background: doughnutGradient }}
-                      aria-label="Password strength doughnut chart"
-                    >
-                      <div className="absolute inset-5 flex items-center justify-center rounded-full bg-zinc-950">
-                        <div className="text-center">
-                          <p className="text-xs text-zinc-500">Total</p>
-                          <p className="text-2xl font-bold text-slate-100">{totalPasswords}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex min-w-[140px] flex-col gap-3 border-l border-zinc-800 pl-5 text-xs">
-                      {strengthWithPercentages.map((item) => (
-                        <div key={`${item.key}-legend`} className="flex items-center gap-2 text-zinc-300">
-                          <span className={`h-2.5 w-2.5 rounded-full ${item.colorClass}`} />
-                          <span className="truncate">{item.key}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
-                <h2 className="text-lg font-semibold text-slate-100">Recent Passwords Added</h2>
-                <p className="mt-1 text-sm text-zinc-400">Latest entries based on most recent vault update.</p>
-
-                <div className="mt-4 space-y-3">
-                  {recentItems.length === 0 ? (
-                    <p className="text-sm text-zinc-500">No passwords added yet.</p>
-                  ) : (
-                    recentItems.map((item) => {
-                      const normalizedUrl = getNormalizedUrl(item.url);
-                      const passwordStrengthBorder = getPasswordStrengthBorder(item.password || '');
-
-                      return (
-                      <div key={item.id} className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">
-                        <div className="flex items-start justify-between gap-3">
-                          {normalizedUrl ? (
-                            <a
-                              href={normalizedUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex min-w-0 items-center gap-3 hover:opacity-90 transition-opacity cursor-pointer"
-                              title={`Open ${item.siteName}`}
-                            >
-                              <div className="h-9 w-9 overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900">
-                                <Favicon url={item.url} alt={`${item.siteName} icon`} />
-                              </div>
-                              <div className="min-w-0">
-                                <p className="truncate text-sm font-semibold text-slate-200 underline-offset-2 hover:underline">{item.siteName}</p>
-                                <p className="truncate text-xs text-zinc-400">{item.username}</p>
-                              </div>
-                            </a>
-                          ) : (
-                            <div className="flex min-w-0 items-center gap-3">
-                              <div className="h-9 w-9 overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900">
-                                <Favicon url={item.url} alt={`${item.siteName} icon`} />
-                              </div>
-                              <div className="min-w-0">
-                                <p className="truncate text-sm font-semibold text-slate-200">{item.siteName}</p>
-                                <p className="truncate text-xs text-zinc-400">{item.username}</p>
-                              </div>
-                            </div>
-                          )}
-
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => handleRecentTogglePassword(item.id)}
-                              className="rounded-md p-1.5 text-zinc-400 transition hover:bg-zinc-800 hover:text-slate-200 cursor-pointer"
-                              title={recentVisiblePasswords[item.id] ? 'Hide password' : 'Show password'}
-                            >
-                              {recentVisiblePasswords[item.id] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                            </button>
-                            <button
-                              onClick={() => void handleRecentCopyPassword(item.id, item.password)}
-                              className="rounded-md p-1.5 text-zinc-400 transition hover:bg-zinc-800 hover:text-slate-200 cursor-pointer"
-                              title="Copy password"
-                            >
-                              {recentCopiedPasswords[item.id] ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className={`mt-3 rounded-lg border border-zinc-800 border-b-2 ${passwordStrengthBorder} bg-zinc-900/70 px-3 py-2`}>
-                          <p className="font-mono text-xs text-slate-200">
-                            {recentVisiblePasswords[item.id] ? (item.password || '-') : '••••••••••••'}
-                          </p>
-                        </div>
-
-                        <p className="mt-2 text-[11px] text-zinc-500">{formatRecentTime(item.updatedAt)}</p>
-                      </div>
-                    );
-                  })
-                  )}
-                </div>
+                )}
               </div>
             </div>
           </motion.div>
         ) : null}
       </AnimatePresence>
 
-      <div className="flex-1 w-full bg-zinc-950/50 rounded-2xl">
+      {/* ── Vault grid ───────────────────────────────────────────────── */}
+      <div className="flex-1">
         {loading ? (
-          <div className="flex justify-center items-center h-64">
-             <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
+          <div className="flex justify-center items-center h-48">
+            <Loader2 className="w-7 h-7 animate-spin text-emerald-500" />
           </div>
         ) : (
-          <motion.div
-            layout
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-8"
-          >
+          <motion.div layout className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pb-8">
             <AnimatePresence>
               {sortedItems.length === 0 ? (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className="col-span-full text-center py-20 text-zinc-500"
+                  className="col-span-full flex flex-col items-center justify-center py-20 text-center"
                 >
-                  {search ? 'No matches found.' : 'Your vault is empty. Add a new password!'}
+                  <div className="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-4">
+                    <Search className="w-6 h-6 text-zinc-600" />
+                  </div>
+                  <p className="text-zinc-400 font-medium">
+                    {search ? 'No matches found' : 'Your vault is empty'}
+                  </p>
+                  <p className="text-zinc-600 text-sm mt-1">
+                    {search ? `No results for "${search}"` : 'Add your first password to get started'}
+                  </p>
+                  {!search && (
+                    <button
+                      onClick={() => { setEditingItem(null); setIsModalOpen(true); }}
+                      className="mt-4 inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-semibold py-2 px-4 rounded-xl transition-all text-sm cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4" /> Add Password
+                    </button>
+                  )}
                 </motion.div>
               ) : (
                 sortedItems.map((item) => (
@@ -789,7 +731,7 @@ export default function Dashboard() {
         )}
       </div>
 
-      <AddEditItemModal 
+      <AddEditItemModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSave={handleSaveItem}

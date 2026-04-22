@@ -439,7 +439,7 @@ export default function SettingsPage() {
           {!isInstalled && (
             <div className="p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
-                <h3 className="font-semibold text-slate-200">Install App (PWA)</h3>
+                <h3 className="font-semibold text-slate-200">Install App</h3>
                 <p className="text-sm text-zinc-400 max-w-xl">
                   Install Mero Password Manager for a native app-like experience with faster launch and offline shell support.
                 </p>

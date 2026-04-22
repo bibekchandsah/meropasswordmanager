@@ -23,7 +23,7 @@ export default function AddEditItemModal({ isOpen, onClose, onSave, initialData 
 
   const getPasswordStrength = (
     value: string
-  ): { label: 'Weak' | 'Normal' | 'Medium' | 'Strong'; score: number; colorClass: string; borderClass: string; barClass: string } | null => {
+  ): { label: string; score: number; colorClass: string; borderClass: string; barClass: string } | null => {
     if (!value) return null;
 
     let score = 0;
@@ -33,10 +33,11 @@ export default function AddEditItemModal({ isOpen, onClose, onSave, initialData 
     if (/\d/.test(value)) score += 1;
     if (/[^A-Za-z0-9]/.test(value)) score += 1;
 
-    if (score <= 1) return { label: 'Weak', score: 1, colorClass: 'text-red-400', borderClass: 'border-b-red-500', barClass: 'bg-red-500' };
-    if (score === 2) return { label: 'Normal', score: 2, colorClass: 'text-amber-400', borderClass: 'border-b-yellow-400', barClass: 'bg-yellow-400' };
-    if (score === 3) return { label: 'Medium', score: 3, colorClass: 'text-blue-400', borderClass: 'border-b-blue-500', barClass: 'bg-blue-500' };
-    return { label: 'Strong', score: 4, colorClass: 'text-emerald-400', borderClass: 'border-b-green-500', barClass: 'bg-green-500' };
+    if (score <= 1) return { label: 'Weak',      score: 1, colorClass: 'text-red-400',    borderClass: 'border-b-red-500',     barClass: 'bg-red-500' };
+    if (score === 2) return { label: 'Fair',      score: 2, colorClass: 'text-yellow-400', borderClass: 'border-b-yellow-400',  barClass: 'bg-yellow-400' };
+    if (score === 3) return { label: 'Good',      score: 3, colorClass: 'text-blue-400',   borderClass: 'border-b-blue-500',    barClass: 'bg-blue-500' };
+    if (score === 4) return { label: 'Strong',    score: 4, colorClass: 'text-emerald-400',borderClass: 'border-b-emerald-500', barClass: 'bg-emerald-500' };
+    return              { label: 'Excellent', score: 5, colorClass: 'text-emerald-300', borderClass: 'border-b-emerald-400', barClass: 'bg-emerald-400' };
   };
 
   const passwordStrength = getPasswordStrength(password);
@@ -177,8 +178,8 @@ export default function AddEditItemModal({ isOpen, onClose, onSave, initialData 
                         <span className="text-zinc-500">Strength</span>
                         <span className={`font-semibold ${passwordStrength.colorClass}`}>{passwordStrength.label}</span>
                       </div>
-                      <div className="mt-1 grid grid-cols-4 gap-1">
-                        {[1, 2, 3, 4].map((segment) => (
+                      <div className="mt-1 grid grid-cols-5 gap-1">
+                        {[1, 2, 3, 4, 5].map((segment) => (
                           <div
                             key={segment}
                             className={`h-1.5 rounded-full ${segment <= passwordStrength.score ? passwordStrength.barClass : 'bg-zinc-800'}`}

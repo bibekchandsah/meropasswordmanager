@@ -11,6 +11,7 @@ interface VaultItemCardProps {
   onEdit: () => void;
   onDelete: () => void;
   onToggleFavorite: () => void;
+  viewMode?: 'grid' | 'list';
 }
 
 function getStrengthMeta(password: string): { score: number; label: string; color: string; bg: string; bar: string; bottomColor: string } {
@@ -28,7 +29,7 @@ function getStrengthMeta(password: string): { score: number; label: string; colo
   return              { score, label: 'Excellent', color: 'text-emerald-300', bg: 'bg-emerald-500/15',bar: 'bg-emerald-400',bottomColor: '#34d399' };
 }
 
-export default function VaultItemCard({ item, onEdit, onDelete, onToggleFavorite }: VaultItemCardProps) {
+export default function VaultItemCard({ item, onEdit, onDelete, onToggleFavorite, viewMode = 'grid' }: VaultItemCardProps) {
   const [copied, setCopied] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -69,98 +70,126 @@ export default function VaultItemCard({ item, onEdit, onDelete, onToggleFavorite
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.15 } }}
-      className="group relative flex flex-col rounded-2xl border border-zinc-800 bg-zinc-900 p-5 shadow-sm transition-all duration-200 hover:border-zinc-700 hover:shadow-lg hover:shadow-black/20 overflow-hidden"
+      style={
+        viewMode === 'grid'
+          ? { borderBottomColor: strength.bottomColor, borderBottomWidth: '3px' }
+          : { borderLeftColor: strength.bottomColor, borderLeftWidth: '3px' }
+      }
+      className={`group relative transition-all duration-200 border border-zinc-800 bg-zinc-900 shadow-sm hover:border-zinc-700 hover:shadow-lg hover:shadow-black/20 ${
+        showMenu ? "z-50" : "z-0"
+      } ${
+        viewMode === 'grid' 
+          ? "flex flex-col rounded-2xl p-5 h-full" 
+          : "grid grid-cols-[minmax(0,1fr)_44px] sm:grid-cols-[minmax(0,1fr)_180px_44px] md:grid-cols-[minmax(0,1fr)_200px_90px_44px] lg:grid-cols-[minmax(0,1fr)_220px_100px_44px] items-center gap-2 sm:gap-4 rounded-xl px-3 py-2 sm:px-4 sm:py-2.5"
+      }`}
       onMouseLeave={() => setShowMenu(false)}
     >
-      {/* Solid bottom border — color reflects password strength, inline style avoids Tailwind JIT purging */}
-      <div
-        className="absolute inset-x-0 bottom-0 h-[3px] rounded-b-2xl"
-        style={{ backgroundColor: strength.bottomColor }}
-      />
 
-      {/* Header row */}
-      <div className="flex items-start justify-between gap-2 mb-4">
+      {/* Header/Main Info Section */}
+      <div className={`flex items-center gap-3 min-w-0 ${viewMode === 'grid' ? "mb-4 justify-between w-full" : "flex-1"}`}>
         <div className="flex items-center gap-3 min-w-0">
           <div className="relative flex-shrink-0">
-            <div className="w-10 h-10 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center overflow-hidden">
+            <div className={`${viewMode === 'grid' ? "w-10 h-10" : "w-8 h-8"} transition-all rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center overflow-hidden`}>
               <Favicon url={item.url} alt={`${item.siteName} icon`} />
             </div>
             {item.favorite && (
-              <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-yellow-500 flex items-center justify-center">
-                <Star className="w-2.5 h-2.5 fill-zinc-950 text-zinc-950" />
+              <div className={`absolute -top-1 -right-1 rounded-full bg-yellow-500 flex items-center justify-center ${viewMode === 'grid' ? "w-4 h-4" : "w-3 h-3"}`}>
+                <Star className={`${viewMode === 'grid' ? "w-2.5 h-2.5" : "w-2 h-2"} fill-zinc-950 text-zinc-950`} />
               </div>
             )}
           </div>
 
           <div className="min-w-0">
-            {normalizedUrl ? (
-              <a
-                href={normalizedUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="group/link flex items-center gap-1"
-                title={`Open ${item.siteName}`}
-              >
-                <span className="font-semibold text-slate-100 text-sm truncate max-w-[160px] group-hover/link:text-emerald-400 transition-colors">
-                  {item.siteName}
-                </span>
-                <ExternalLink className="w-3 h-3 text-zinc-600 group-hover/link:text-emerald-400 transition-colors flex-shrink-0" />
-              </a>
-            ) : (
-              <p className="font-semibold text-slate-100 text-sm truncate max-w-[160px]">{item.siteName}</p>
-            )}
-            <p className="text-zinc-500 text-xs truncate max-w-[160px] mt-0.5">{item.username}</p>
+            <div className={`flex items-baseline gap-x-2 ${viewMode === 'grid' ? "flex-col" : "flex-col sm:flex-row sm:items-baseline"}`}>
+              {normalizedUrl ? (
+                <a
+                  href={normalizedUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group/link flex items-center gap-1"
+                  title={`Open ${item.siteName}`}
+                >
+                  <span className={`font-semibold text-slate-100 truncate group-hover/link:text-emerald-400 transition-colors ${viewMode === 'grid' ? "max-w-[160px] text-sm" : "max-w-[120px] sm:max-w-[160px] md:max-w-[200px] text-xs"}`}>
+                    {item.siteName}
+                  </span>
+                  <ExternalLink className="w-3 h-3 text-zinc-600 group-hover/link:text-emerald-400 transition-colors flex-shrink-0" />
+                </a>
+              ) : (
+                <p className={`font-semibold text-slate-100 truncate ${viewMode === 'grid' ? "max-w-[160px] text-sm" : "max-w-[120px] sm:max-w-[160px] md:max-w-[200px] text-xs"}`}>{item.siteName}</p>
+              )}
+              <p className={`text-zinc-500 truncate transition-all ${viewMode === 'grid' ? "text-xs mt-0.5 max-w-[160px]" : "text-[10px] sm:text-[11px] max-w-[100px] sm:max-w-[120px]"}`}>
+                {viewMode === 'list' && <span className="hidden sm:inline text-zinc-700 mr-1.5">•</span>}
+                {item.username}
+              </p>
+            </div>
           </div>
         </div>
 
-        {/* Context menu */}
-        <div className="relative flex-shrink-0">
-          <button
-            onClick={() => setShowMenu(!showMenu)}
-            className={`p-1.5 rounded-lg text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800 transition-colors cursor-pointer ${isTouchDevice ? 'touch-manipulation' : ''}`}
-          >
-            <MoreVertical className="w-4 h-4" />
-          </button>
+        {/* Action Buttons in Grid Mode or Hidden in List Mode (moved to end) */}
+        {viewMode === 'grid' && (
+          <div className="relative flex-shrink-0">
+            <button
+              onClick={() => setShowMenu(!showMenu)}
+              className={`p-1.5 rounded-lg text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800 transition-colors cursor-pointer ${isTouchDevice ? 'touch-manipulation' : ''}`}
+            >
+              <MoreVertical className="w-4 h-4" />
+            </button>
 
-          <AnimatePresence>
-            {showMenu && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: -4 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: -4 }}
-                transition={{ duration: 0.1 }}
-                className="absolute right-0 top-8 w-44 bg-zinc-950 rounded-xl shadow-2xl z-20 border border-zinc-800 overflow-hidden"
-              >
-                <button
-                  onClick={() => { onToggleFavorite(); setShowMenu(false); }}
-                  className="dropdown-item w-full text-left px-3 py-2.5 text-sm text-zinc-300 flex items-center gap-2.5 cursor-pointer transition-colors"
+            {/* Context menu reuse */}
+            <AnimatePresence>
+              {showMenu && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                  transition={{ duration: 0.1 }}
+                  className="absolute right-0 top-8 w-48 bg-zinc-950 rounded-xl shadow-2xl z-20 border border-zinc-800 overflow-hidden"
                 >
-                  {item.favorite
-                    ? <><StarOff className="w-4 h-4 text-yellow-400" /> Remove Favorite</>
-                    : <><Star className="w-4 h-4 text-yellow-400" /> Add Favorite</>}
-                </button>
-                <div className="h-px bg-zinc-800" />
-                <button
-                  onClick={() => { onEdit(); setShowMenu(false); }}
-                  className="dropdown-item w-full text-left px-3 py-2.5 text-sm text-zinc-300 flex items-center gap-2.5 cursor-pointer transition-colors"
-                >
-                  <Edit2 className="w-4 h-4 text-blue-400" /> Edit
-                </button>
-                <div className="h-px bg-zinc-800" />
-                <button
-                  onClick={() => { onDelete(); setShowMenu(false); }}
-                  className="dropdown-item-danger w-full text-left px-3 py-2.5 text-sm text-red-400 flex items-center gap-2.5 cursor-pointer transition-colors"
-                >
-                  <Trash2 className="w-4 h-4" /> Delete
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+                  <div className="py-1.5">
+                    <div className="sm:hidden">
+                      <button
+                        onClick={() => { handleCopy(item.password); setShowMenu(false); }}
+                        className="dropdown-item w-full text-left px-3 py-2.5 text-sm text-zinc-300 flex items-center gap-2.5 cursor-pointer transition-colors"
+                      >
+                        <Copy className="w-4 h-4 text-emerald-400" /> Copy Password
+                      </button>
+                      <div className="h-px bg-zinc-800 my-1" />
+                    </div>
+
+                    <button
+                      onClick={() => { onToggleFavorite(); setShowMenu(false); }}
+                      className="dropdown-item w-full text-left px-3 py-2.5 text-sm text-zinc-300 flex items-center gap-2.5 cursor-pointer transition-colors"
+                    >
+                      {item.favorite
+                        ? <><StarOff className="w-4 h-4 text-yellow-400" /> Remove Favorite</>
+                        : <><Star className="w-4 h-4 text-yellow-400" /> Add Favorite</>}
+                    </button>
+                    <div className="h-px bg-zinc-800 my-1" />
+                    <button
+                      onClick={() => { onEdit(); setShowMenu(false); }}
+                      className="dropdown-item w-full text-left px-3 py-2.5 text-sm text-zinc-300 flex items-center gap-2.5 cursor-pointer transition-colors"
+                    >
+                      <Edit2 className="w-4 h-4 text-blue-400" /> Edit
+                    </button>
+                    <div className="h-px bg-zinc-800 my-1" />
+                    <button
+                      onClick={() => { onDelete(); setShowMenu(false); }}
+                      className="dropdown-item-danger w-full text-left px-3 py-2.5 text-sm text-red-500 flex items-center gap-2.5 cursor-pointer transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" /> Delete
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
       </div>
 
-      {/* Password row */}
-      <div className="flex items-center gap-1.5 rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-2 mt-auto">
+      {/* Center/End Content: Password Row */}
+      <div className={`flex items-center gap-1.5 rounded-xl bg-zinc-950 border border-zinc-800 transition-all ${
+        viewMode === 'grid' ? "px-3 py-2 mt-auto" : "px-2 py-1 hidden sm:flex"
+      }`}>
         <p className="flex-1 font-mono text-xs text-zinc-300 truncate select-none">
           {showPassword ? (item.password || '—') : '••••••••••••••'}
         </p>
@@ -184,26 +213,98 @@ export default function VaultItemCard({ item, onEdit, onDelete, onToggleFavorite
         </button>
       </div>
 
-      {/* Strength badge */}
-      <div className="flex items-center justify-between mt-3 mb-1">
-        <span
-          className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full"
-          style={{ backgroundColor: `${strength.bottomColor}18`, color: strength.bottomColor }}
-        >
-          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: strength.bottomColor }} />
-          {strength.label}
-        </span>
-        {/* Strength segments */}
-        <div className="flex gap-0.5">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div
-              key={i}
-              className="h-1 w-4 rounded-full transition-colors"
-              style={{ backgroundColor: i <= strength.score ? strength.bottomColor : '#27272a' }}
-            />
-          ))}
+      {/* Right Section in List Mode: Strength + Menu */}
+      {viewMode === 'list' && (
+        <>
+          <div className="hidden md:flex items-center justify-center">
+            <span
+              className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full"
+              style={{ backgroundColor: `${strength.bottomColor}18`, color: strength.bottomColor }}
+            >
+              <span className="w-1 h-1 rounded-full" style={{ backgroundColor: strength.bottomColor }} />
+              {strength.label}
+            </span>
+          </div>
+
+          <div className="relative flex justify-end">
+            <button
+              onClick={() => setShowMenu(!showMenu)}
+              className={`p-1.5 rounded-lg text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800 transition-colors cursor-pointer ${isTouchDevice ? 'touch-manipulation' : ''}`}
+            >
+              <MoreVertical className="w-4 h-4" />
+            </button>
+
+            <AnimatePresence>
+              {showMenu && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                  transition={{ duration: 0.1 }}
+                  className="absolute right-0 top-8 w-48 bg-zinc-950 rounded-xl shadow-2xl z-20 border border-zinc-800 overflow-hidden"
+                >
+                  <div className="py-1.5">
+                    <div className="sm:hidden">
+                      <button
+                        onClick={() => { handleCopy(item.password); setShowMenu(false); }}
+                        className="dropdown-item w-full text-left px-3 py-2.5 text-sm text-zinc-300 flex items-center gap-2.5 cursor-pointer transition-colors"
+                      >
+                        <Copy className="w-4 h-4 text-emerald-400" /> Copy Password
+                      </button>
+                      <div className="h-px bg-zinc-800 my-1" />
+                    </div>
+
+                    <button
+                      onClick={() => { onToggleFavorite(); setShowMenu(false); }}
+                      className="dropdown-item w-full text-left px-3 py-2.5 text-sm text-zinc-300 flex items-center gap-2.5 cursor-pointer transition-colors"
+                    >
+                      {item.favorite
+                        ? <><StarOff className="w-4 h-4 text-yellow-400" /> Remove Favorite</>
+                        : <><Star className="w-4 h-4 text-yellow-400" /> Add Favorite</>}
+                    </button>
+                    <div className="h-px bg-zinc-800 my-1" />
+                    <button
+                      onClick={() => { onEdit(); setShowMenu(false); }}
+                      className="dropdown-item w-full text-left px-3 py-2.5 text-sm text-zinc-300 flex items-center gap-2.5 cursor-pointer transition-colors"
+                    >
+                      <Edit2 className="w-4 h-4 text-blue-400" /> Edit
+                    </button>
+                    <div className="h-px bg-zinc-800 my-1" />
+                    <button
+                      onClick={() => { onDelete(); setShowMenu(false); }}
+                      className="dropdown-item-danger w-full text-left px-3 py-2.5 text-sm text-red-500 flex items-center gap-2.5 cursor-pointer transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" /> Delete
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </>
+      )}
+
+      {/* Footer in Grid Mode */}
+      {viewMode === 'grid' && (
+        <div className="flex items-center justify-between mt-3 mb-1">
+          <span
+            className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full"
+            style={{ backgroundColor: `${strength.bottomColor}18`, color: strength.bottomColor }}
+          >
+            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: strength.bottomColor }} />
+            {strength.label}
+          </span>
+          <div className="flex gap-0.5">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div
+                key={i}
+                className="h-1 w-4 rounded-full transition-colors"
+                style={{ backgroundColor: i <= strength.score ? strength.bottomColor : '#27272a' }}
+              />
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </motion.div>
   );
 }

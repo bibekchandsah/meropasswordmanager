@@ -8,7 +8,7 @@ import { useStore } from '@/store/useStore';
 import { encryptData, decryptData, deriveKey } from '@/lib/crypto';
 import { isPasskeySupported, isPasskeyRegistered, authenticateWithPasskey } from '@/lib/passkey';
 import { VaultItem } from '@/types/vault';
-import { Plus, Search, Loader2, Lock, KeyRound, ChevronDown, Eye, EyeOff, Copy, Check, Fingerprint } from 'lucide-react';
+import { Plus, Search, Loader2, Lock, KeyRound, ChevronDown, Eye, EyeOff, Copy, Check, Fingerprint, LayoutGrid, List } from 'lucide-react';
 import VaultItemCard from '@/components/VaultItemCard';
 import AddEditItemModal from '@/components/AddEditItemModal';
 import Favicon from '@/components/Favicon';
@@ -30,6 +30,7 @@ export default function Dashboard() {
   const [recentVisiblePasswords, setRecentVisiblePasswords] = useState<Record<string, boolean>>({});
   const [recentCopiedPasswords, setRecentCopiedPasswords] = useState<Record<string, boolean>>({});
   const [showDashboardContainers, setShowDashboardContainers] = useState(true);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<VaultItem | null>(null);
@@ -471,6 +472,14 @@ export default function Dashboard() {
           </button>
 
           <button
+            onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+            className="h-9 w-9 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300 transition-colors flex items-center justify-center cursor-pointer"
+            title={viewMode === 'grid' ? 'Switch to list view' : 'Switch to grid view'}
+          >
+            {viewMode === 'grid' ? <List className="w-4 h-4" /> : <LayoutGrid className="w-4 h-4" />}
+          </button>
+
+          <button
             onClick={() => { setEditingItem(null); setIsModalOpen(true); }}
             className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-semibold py-2 px-4 rounded-xl transition-all shadow-lg shadow-emerald-500/20 cursor-pointer text-sm"
           >
@@ -689,7 +698,13 @@ export default function Dashboard() {
             <Loader2 className="w-7 h-7 animate-spin text-emerald-500" />
           </div>
         ) : (
-          <motion.div layout className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pb-8">
+          <motion.div 
+            layout 
+            className={viewMode === 'grid' 
+              ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pb-8" 
+              : "flex flex-col gap-2 pb-8"
+            }
+          >
             <AnimatePresence>
               {sortedItems.length === 0 ? (
                 <motion.div
@@ -723,6 +738,7 @@ export default function Dashboard() {
                     onEdit={() => { setEditingItem(item); setIsModalOpen(true); }}
                     onDelete={() => handleDeleteItem(item.id)}
                     onToggleFavorite={() => handleToggleFavorite(item)}
+                    viewMode={viewMode}
                   />
                 ))
               )}

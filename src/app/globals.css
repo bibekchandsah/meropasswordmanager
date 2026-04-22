@@ -6,6 +6,8 @@
   --foreground: #e2e8f0;
   --surface-1: #09090b;
   --surface-2: #18181b;
+  --color-zinc-900: #212121;
+  --color-zinc-950: #131313;
   --surface-3: #27272a;
   --border-color: #27272a;
   --muted: #64748b;
@@ -19,8 +21,9 @@ html[data-theme='light'] {
   --background: #f8fafc;
   --foreground: #0f172a;
   --surface-1: #ffffff;
-  --surface-2: #f1f5f9;
-  --surface-3: #e2e8f0;
+  --surface-2: #f7f7f7;
+  --surface-3: #dddddd;
+  /* --surface-3: #e2e8f0; */
   --border-color: #cbd5e1;
   --muted: #475569;
   --scrollbar-track: rgba(226, 232, 240, 0.9);

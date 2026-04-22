@@ -303,7 +303,7 @@ export default function VaultItemCard({ item, onEdit, onDelete, onToggleFavorite
               <div
                 key={i}
                 className="h-1 w-4 rounded-full transition-colors"
-                style={{ backgroundColor: i <= strength.score ? strength.bottomColor : '#27272a' }}
+                style={{ backgroundColor: i <= strength.score ? strength.bottomColor : '#3b3b3b' }}
               />
             ))}
           </div>
